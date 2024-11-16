@@ -1,0 +1,276 @@
+/* Import Fonts
+---------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+
+/* Animations
+---------------------------------------- */
+@keyframes titleGlow {
+    0% { text-shadow: 0 0 20px rgba(30, 136, 229, 0.5); }
+    50% { text-shadow: 0 0 50px rgba(30, 136, 229, 1), 0 0 100px rgba(30, 136, 229, 0.75); }
+    100% { text-shadow: 0 0 20px rgba(30, 136, 229, 0.5); }
+}
+
+@keyframes fadeIn {
+    0% { opacity: 0; transform: translateY(50px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+    100% { transform: translateY(0px); }
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+@keyframes slideIn {
+    0% { transform: translateX(-200%); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
+}
+
+/* Body Styles with Background Image
+---------------------------------------- */
+body {
+    font-family: 'Poppins', sans-serif;
+    margin: 0;
+    padding: 0;
+    background: url('https://source.unsplash.com/1920x1080/?success,achievement') no-repeat center center fixed;
+    background-size: cover;
+    color: #333;
+    overflow-x: hidden;
+}
+
+/* Header Styles
+---------------------------------------- */
+[data-testid="stHeader"] {
+    background: transparent;
+}
+
+.title-container {
+    background: rgba(30, 136, 229, 0.9);
+    padding: 3rem;
+    border-radius: 20px;
+    margin: 2rem 0;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    animation: fadeIn 1s ease-out;
+    position: relative;
+    overflow: hidden;
+}
+
+.title-container::before {
+    content: '';
+    position: absolute;
+    top: -50px;
+    left: -50px;
+    width: 200px;
+    height: 200px;
+    background: rgba(255, 255, 255, 0.2);
+    filter: blur(100px);
+    border-radius: 50%;
+    animation: float 6s infinite ease-in-out;
+}
+
+.main-title {
+    font-size: 5rem !important;
+    color: white !important;
+    text-align: center;
+    padding: 1.5rem 0;
+    font-weight: 700;
+    animation: titleGlow 3s infinite;
+    margin: 0;
+    line-height: 1.2;
+    letter-spacing: -1px;
+    text-transform: uppercase;
+    -webkit-text-fill-color: white !important;
+}
+
+.subtitle {
+    font-size: 2rem;
+    color: rgba(255, 255, 255, 0.9) !important;
+    text-align: center;
+    margin: 1rem 0 0 0;
+    font-weight: 400;
+    animation: fadeIn 1.5s ease-out 0.3s both;
+    line-height: 1.5;
+}
+
+/* Additional Effects for Cards
+---------------------------------------- */
+.feature-card {
+    padding: 2.5rem;
+    border-radius: 20px;
+    border: 1px solid rgba(30, 136, 229, 0.2);
+    background: linear-gradient(135deg, #ffffff, #f8f9fa);
+    margin: 1.5rem 0;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    transition: transform 0.4s ease, box-shadow 0.4s ease, background 0.4s ease;
+    position: relative;
+    overflow: hidden;
+    animation: fadeIn 0.6s ease-out;
+}
+
+.feature-card::before {
+    content: '';
+    position: absolute;
+    bottom: -20px;
+    left: -20px;
+    width: 120px;
+    height: 120px;
+    background: rgba(66, 165, 245, 0.25);
+    border-radius: 50%;
+    animation: pulse 4s infinite;
+    filter: blur(50px);
+}
+
+.feature-card:hover {
+    transform: translateY(-15px);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.25);
+    background: linear-gradient(135deg, #e3f2fd, #ffffff);
+}
+
+/* Overlay Effect on Cards */
+.feature-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(66, 165, 245, 0.1);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+
+.feature-card:hover::after {
+    opacity: 1;
+}
+
+.stat-card {
+    padding: 2.5rem;
+    border-radius: 20px;
+    border: 1px solid rgba(30, 136, 229, 0.2);
+    background: linear-gradient(135deg, #ffffff, #f8f9fa);
+    margin: 1.5rem 0;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    transition: transform 0.4s ease, box-shadow 0.4s ease, background 0.4s ease;
+    position: relative;
+    overflow: hidden;
+    animation: fadeIn 0.6s ease-out;
+    text-align: center;
+}
+
+.stat-card::before {
+    content: '';
+    position: absolute;
+    bottom: -20px;
+    left: -20px;
+    width: 120px;
+    height: 120px;
+    background: rgba(66, 165, 245, 0.25);
+    border-radius: 50%;
+    animation: pulse 4s infinite;
+    filter: blur(50px);
+}
+
+.stat-card:hover {
+    transform: translateY(-15px);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.25);
+    background: linear-gradient(135deg, #e3f2fd, #ffffff);
+}
+
+.stat-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(66, 165, 245, 0.1);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+
+.stat-card:hover::after {
+    opacity: 1;
+}
+
+.stat-number {
+    font-size: 3.5rem;
+    font-weight: 700;
+    color: #1E88E5;
+    margin-bottom: 1rem;
+    font-family: 'Poppins', sans-serif;
+    position: relative;
+    animation: titleGlow 3s infinite;
+}
+
+.stat-label {
+    font-family: 'Poppins', sans-serif;
+    font-size: 1.2rem;
+    color: #666;
+    font-weight: 500;
+    animation: fadeIn 1s ease-out;
+}
+.assistant-message {
+    background-color: #f0f7ff;
+    border-left: 4px solid #0066cc;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 5px;
+}
+
+.user-message {
+    background-color: #f5f5f5;
+    border-left: 4px solid #666666;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 5px;
+}
+
+/* Add some animation */
+.assistant-message, .user-message {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Style the chat input area */
+.stTextInput > div > div > input {
+    border-radius: 20px;
+    padding: 10px 20px;
+}
+
+/* Style the chat button */
+.stButton > button {
+    border-radius: 20px;
+    background-color: #0066cc;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+.stButton > button:hover {
+    background-color: #0052a3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+/* Responsive adjustments for stat cards */
+@media (max-width: 768px) {
+    .stat-card {
+        padding: 2rem;
+        margin: 1rem 0;
+    }
+    .stat-number {
+        font-size: 2.5rem;
+    }
+    .stat-label {
+        font-size: 1rem;
+    }
+}

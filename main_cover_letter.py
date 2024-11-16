@@ -7,6 +7,7 @@ import os
 from pdf_reader import load_pdf
 from splitter import split_text_documents
 from langchain.docstore.document import Document
+import streamlit as st
 
 def get_cover_letter(job_description, pdf, openai_api_key):
     # Load resume
