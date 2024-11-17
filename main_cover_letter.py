@@ -1,8 +1,8 @@
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import Chroma
-from langchain.chat_models import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
-from langchain.chains import RetrievalQA
+from langchain.chains.retrieval_qa.base import RetrievalQA
 import os
 from pdf_reader import load_pdf
 from splitter import split_text_documents
@@ -106,7 +106,7 @@ def get_cover_letter(job_description, pdf, openai_api_key):
     pdf_qa = RetrievalQA.from_chain_type(
         llm=ChatOpenAI(
             temperature=0.7, 
-            model_name='gpt-4o-mini',  # Changed to gpt-3.5-turbo as gpt-4o-mini might not be available
+            model_name='gpt-4o-mini', 
             openai_api_key=openai_api_key
         ),
         chain_type="stuff",

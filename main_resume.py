@@ -1,9 +1,11 @@
 import streamlit as st
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
-from langchain.chat_models import ChatOpenAI
-from langchain.prompts import PromptTemplate
-from langchain.chains import ConversationalRetrievalChain
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain_community.chat_models import ChatOpenAI
+from langchain_core.prompts import PromptTemplate
+from langchain.chains.conversational_retrieval.base import ConversationalRetrievalChain
+from langchain.chains.combine_documents.stuff import StuffDocumentsChain
+from langchain.chains.llm import LLMChain
 from langchain.memory import ConversationBufferMemory
 from langchain.docstore.document import Document
 import os
@@ -17,21 +19,23 @@ def get_resume(job_description: str, resume_file, openai_api_key: str):
     Create a conversational resume analyzer that compares a PDF resume against a job description.
     Using existing load_pdf function.
     """
-    # Create a temporary directory for Chroma
     persist_directory = tempfile.mkdtemp()
     
     try:
-        # Use existing load_pdf function
-        resume_docs = load_pdf(resume_file)  # This already returns split documents
-        
-        # Create document for job description
+        # Load documents
+        resume_docs = load_pdf(resume_file)
         job_doc = Document(
             page_content=f"JOB DESCRIPTION:\n{job_description.strip()}",
             metadata={"source": "job_posting"}
         )
-        
-        # Combine documents (job description and resume docs)
         all_docs = [job_doc] + (resume_docs if isinstance(resume_docs, list) else [resume_docs])
+        
+        # Initialize OpenAI LLM
+        llm = ChatOpenAI(
+            temperature=0.4,
+            model_name='gpt-4o-mini',
+            openai_api_key=openai_api_key
+        )
         
         # Create vector database
         vectordb = Chroma.from_documents(
@@ -39,9 +43,10 @@ def get_resume(job_description: str, resume_file, openai_api_key: str):
             embedding=OpenAIEmbeddings(openai_api_key=openai_api_key),
             persist_directory=persist_directory
         )
-        
-        # Persist the database
         vectordb.persist()
+        
+        # Initialize retriever
+        retriever = vectordb.as_retriever(search_kwargs={'k': 10})
         
         # Initialize conversation memory
         memory = ConversationBufferMemory(
@@ -49,7 +54,32 @@ def get_resume(job_description: str, resume_file, openai_api_key: str):
             return_messages=True
         )
         
-        # Template for initial analysis
+        def create_chain(template_str: str) -> ConversationalRetrievalChain:
+            # Create the document chain
+            doc_prompt = PromptTemplate.from_template(template_str)
+            doc_chain = StuffDocumentsChain(
+                llm_chain=LLMChain(llm=llm, prompt=doc_prompt),
+                document_variable_name="context"
+            )
+            
+            # Create the question generator
+            question_template = """
+            Combine the chat history and follow up question into a standalone question.
+            Chat History: {chat_history}
+            Follow up question: {question}
+            """
+            question_prompt = PromptTemplate.from_template(question_template)
+            question_generator = LLMChain(llm=llm, prompt=question_prompt)
+            
+            # Create the final chain
+            return ConversationalRetrievalChain(
+                combine_docs_chain=doc_chain,
+                retriever=retriever,
+                question_generator=question_generator,
+                memory=memory,
+            )
+        
+        # Create analysis and chat chains with their respective templates
         analysis_template = """
         You are an expert resume analyzer and career advisor. First, analyze the resume and job description provided in the context.
         
@@ -72,7 +102,6 @@ def get_resume(job_description: str, resume_file, openai_api_key: str):
         Chat History: {chat_history}
         """
         
-        # Template for follow-up conversations
         chat_template = """
         You are a helpful career advisor assistant. Using the provided resume and job description:
         
@@ -93,24 +122,6 @@ def get_resume(job_description: str, resume_file, openai_api_key: str):
         Chat History: {chat_history}
         """
         
-        # Create separate chains for analysis and chat
-        def create_chain(template: str) -> ConversationalRetrievalChain:
-            prompt = PromptTemplate(
-                input_variables=["context", "question", "chat_history"],
-                template=template
-            )
-            
-            return ConversationalRetrievalChain.from_llm(
-                llm=ChatOpenAI(
-                    temperature=0.7,
-                    model_name='gpt-4',
-                    openai_api_key=openai_api_key
-                ),
-                retriever=vectordb.as_retriever(search_kwargs={'k': 10}),
-                memory=memory,
-                combine_docs_chain_kwargs={"prompt": prompt}
-            )
-        
         analysis_chain = create_chain(analysis_template)
         chat_chain = create_chain(chat_template)
         
@@ -122,26 +133,22 @@ def get_resume(job_description: str, resume_file, openai_api_key: str):
             def chat(self, question: str) -> str:
                 try:
                     if not self.initial_analysis_done:
-                        # First interaction: Provide analysis and rating
                         result = analysis_chain({"question": "Analyze the resume match for this position"})
                         self.initial_analysis_done = True
                         return result['answer']
                     else:
-                        # Subsequent interactions: Regular chat
                         result = chat_chain({"question": question})
                         return result['answer']
                 except Exception as e:
                     return f"Error processing question: {str(e)}"
             
             def __del__(self):
-                # Cleanup the temporary directory when the assistant is deleted
                 if hasattr(self, '_persist_dir') and os.path.exists(self._persist_dir):
                     shutil.rmtree(self._persist_dir)
         
         return ResumeAssistant()
         
     except Exception as e:
-        # Clean up the temporary directory in case of errors
         if os.path.exists(persist_directory):
             shutil.rmtree(persist_directory)
         raise ValueError(f"Error in resume analysis: {str(e)}")
