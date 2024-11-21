@@ -52,7 +52,7 @@ def render_home_page():
     # Hero Section with enhanced title container
     st.markdown("""
         <div class="title-container">
-            <h1 class="main-title">CareerForge AI</h1>
+            <h1 class="main-title">SU iBot</h1>
             <p class="subtitle">Forge Your Future with AI-Powered Career Tools</p>
         </div>
     """, unsafe_allow_html=True)
@@ -321,7 +321,7 @@ def main():
     st.markdown("""
         <div style='text-align: center; padding: 1rem;'>
             <p style='color: #666; font-family: Poppins, sans-serif; animation: fadeIn 1s ease-out;'>
-                Made with ❤️ by SU iBot
+                SU iBot
             </p>
         </div>
     """, unsafe_allow_html=True)

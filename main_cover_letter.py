@@ -1,8 +1,8 @@
-from langchain.embeddings import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.vectorstores import Chroma
-from langchain_community.chat_models import ChatOpenAI
-from langchain.prompts import PromptTemplate
-from langchain.chains.retrieval_qa.base import RetrievalQA
+from langchain.chains.retrieval import create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.prompts import ChatPromptTemplate
 import os
 from pdf_reader import load_pdf
 from splitter import split_text_documents
@@ -42,8 +42,8 @@ def get_cover_letter(job_description, pdf, openai_api_key):
         embedding=OpenAIEmbeddings(openai_api_key=openai_api_key)
     )
     
-    # Enhanced prompt template with stronger emphasis on job details
-    template = """
+    # Enhanced system prompt template
+    system_prompt = """
     You are a professional cover letter writer. Using the provided context that contains both a job description and a resume, create a tailored cover letter.
 
     STEP 1 - ANALYZE JOB DESCRIPTION:
@@ -97,34 +97,37 @@ def get_cover_letter(job_description, pdf, openai_api_key):
     Context: {context}
     """
     
-    COVER_LETTER_PROMPT = PromptTemplate(
-        input_variables=["context"],
-        template=template
+    # Create prompt template using the new format
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        ("human", "{input}")
+    ])
+    
+    # Initialize LLM
+    llm = ChatOpenAI(
+        temperature=0.7,
+        model_name='gpt-4o-mini',
+        openai_api_key=openai_api_key
     )
     
-    # Set up retrieval chain with higher k value
-    pdf_qa = RetrievalQA.from_chain_type(
-        llm=ChatOpenAI(
-            temperature=0.7, 
-            model_name='gpt-4o-mini', 
-            openai_api_key=openai_api_key
-        ),
-        chain_type="stuff",
-        retriever=vectordb.as_retriever(
-            search_kwargs={'k': 10}  # Increased k for more context
-        ),
-        chain_type_kwargs={
-            "prompt": COVER_LETTER_PROMPT
-        }
+    # Create document chain
+    document_chain = create_stuff_documents_chain(llm, prompt)
+    
+    # Create retrieval chain
+    retrieval_chain = create_retrieval_chain(
+        vectordb.as_retriever(search_kwargs={'k': 10}),
+        document_chain
     )
     
-    # Enhanced query focusing on job details first
+    # Query for cover letter generation
     query = """
     First, carefully analyze the job description to extract company name, position, and key requirements.
     Then, match the resume details to these requirements.
     Finally, create a detailed cover letter that demonstrates deep understanding of both the role and the company.
     """
     
-    result = pdf_qa.run(query)
+    # Execute chain
+    result = retrieval_chain.invoke({"input": query})
     
-    return result
+    # Extract answer from the result
+    return result["answer"]
