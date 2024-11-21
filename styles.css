@@ -1,0 +1,282 @@
+/* Import Fonts
+---------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+
+/* Animations
+---------------------------------------- */
+@keyframes titleGlow {
+    0% { text-shadow: 0 0 20px rgba(255, 140, 0, 0.5); }
+    50% { text-shadow: 0 0 50px rgba(255, 140, 0, 1), 0 0 100px rgba(255, 140, 0, 0.75); }
+    100% { text-shadow: 0 0 20px rgba(255, 140, 0, 0.5); }
+}
+
+@keyframes fadeIn {
+    0% { opacity: 0; transform: translateY(50px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+    100% { transform: translateY(0px); }
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+@keyframes slideIn {
+    0% { transform: translateX(-200%); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
+}
+
+/* Body Styles with Background Image
+---------------------------------------- */
+body {
+    font-family: sans-serif;
+    margin: 0;
+    padding: 0;
+    background: url('https://source.unsplash.com/1920x1080/?success,achievement') no-repeat center center fixed;
+    background-size: cover;
+    color: #333;
+    overflow-x: hidden;
+}
+
+/* Other styles remain the same */
+.title-container {
+    background: rgba(255, 140, 0, 0.9);
+    padding: 3rem;
+    border-radius: 20px;
+    margin: 2rem 0;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    animation: fadeIn 1s ease-out;
+    position: relative;
+    overflow: hidden;
+}
+
+.main-title {
+    font-family: sans-serif;
+    font-size: 5rem !important;
+    color: white !important;
+    text-align: center;
+    padding: 1.5rem 0;
+    font-weight: 700;
+    animation: titleGlow 3s infinite;
+    margin: 0;
+    line-height: 1.2;
+    letter-spacing: -1px;
+    text-transform: uppercase;
+    -webkit-text-fill-color: white !important;
+}
+
+.subtitle {
+    font-family: sans-serif;
+    font-size: 2rem;
+    color: rgba(255, 255, 255, 0.9) !important;
+    text-align: center;
+    margin: 1rem 0 0 0;
+    font-weight: 400;
+    animation: fadeIn 1.5s ease-out 0.3s both;
+    line-height: 1.5;
+}
+
+/* Rest of animations and styles remain identical to the previous version */
+@keyframes titleGlow {
+    0% { text-shadow: 0 0 20px rgba(255, 140, 0, 0.5); }
+    50% { text-shadow: 0 0 50px rgba(255, 140, 0, 1), 0 0 100px rgba(255, 140, 0, 0.75); }
+    100% { text-shadow: 0 0 20px rgba(255, 140, 0, 0.5); }
+}
+
+@keyframes fadeIn {
+    0% { opacity: 0; transform: translateY(50px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+    100% { transform: translateY(0px); }
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+@keyframes slideIn {
+    0% { transform: translateX(-200%); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
+}
+
+[data-testid="stHeader"] {
+    background: transparent;
+}
+
+.feature-card {
+    padding: 2.5rem;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 140, 0, 0.2);
+    background: linear-gradient(135deg, #ffffff, #f8f9fa);
+    margin: 1.5rem 0;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    transition: transform 0.4s ease, box-shadow 0.4s ease, background 0.4s ease;
+    position: relative;
+    overflow: hidden;
+    animation: fadeIn 0.6s ease-out;
+}
+
+.feature-card::before {
+    content: '';
+    position: absolute;
+    bottom: -20px;
+    left: -20px;
+    width: 120px;
+    height: 120px;
+    background: rgba(255, 165, 0, 0.25);
+    border-radius: 50%;
+    animation: pulse 4s infinite;
+    filter: blur(50px);
+}
+
+.feature-card:hover {
+    transform: translateY(-15px);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.25);
+    background: linear-gradient(135deg, #fff3e0, #ffffff);
+}
+
+.feature-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 165, 0, 0.1);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+
+.feature-card:hover::after {
+    opacity: 1;
+}
+
+.stat-card {
+    padding: 2.5rem;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 140, 0, 0.2);
+    background: linear-gradient(135deg, #ffffff, #f8f9fa);
+    margin: 1.5rem 0;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    transition: transform 0.4s ease, box-shadow 0.4s ease, background 0.4s ease;
+    position: relative;
+    overflow: hidden;
+    animation: fadeIn 0.6s ease-out;
+    text-align: center;
+}
+
+.stat-card::before {
+    content: '';
+    position: absolute;
+    bottom: -20px;
+    left: -20px;
+    width: 120px;
+    height: 120px;
+    background: rgba(255, 165, 0, 0.25);
+    border-radius: 50%;
+    animation: pulse 4s infinite;
+    filter: blur(50px);
+}
+
+.stat-card:hover {
+    transform: translateY(-15px);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.25);
+    background: linear-gradient(135deg, #fff3e0, #ffffff);
+}
+
+.stat-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 165, 0, 0.1);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+
+.stat-card:hover::after {
+    opacity: 1;
+}
+
+.stat-number {
+    font-family: sans-serif;
+    font-size: 3.5rem;
+    font-weight: 700;
+    color: #FF8C00;
+    margin-bottom: 1rem;
+    position: relative;
+    animation: titleGlow 3s infinite;
+}
+
+.stat-label {
+    font-family: sans-serif;
+    font-size: 1.2rem;
+    color: #666;
+    font-weight: 500;
+    animation: fadeIn 1s ease-out;
+}
+
+.assistant-message {
+    background-color: #fff3e0;
+    border-left: 4px solid #FF8C00;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 5px;
+}
+
+.user-message {
+    background-color: #f5f5f5;
+    border-left: 4px solid #666666;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 5px;
+}
+
+.assistant-message, .user-message {
+    animation: fadeIn 0.5s ease-in;
+}
+
+.stTextInput > div > div > input {
+    border-radius: 20px;
+    padding: 10px 20px;
+}
+
+.stButton > button {
+    border-radius: 20px;
+    background-color: #FF8C00;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+.stButton > button:hover {
+    background-color: #FF7000;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+@media (max-width: 768px) {
+    .stat-card {
+        padding: 2rem;
+        margin: 1rem 0;
+    }
+    .stat-number {
+        font-size: 2.5rem;
+    }
+    .stat-label {
+        font-size: 1rem;
+    }
+}
