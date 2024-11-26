@@ -1,5 +1,4 @@
 from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
 from langchain_community.chat_models import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from langchain.chains.conversational_retrieval.base import ConversationalRetrievalChain
@@ -12,6 +11,13 @@ from pdf_reader import load_pdf
 from typing import List, Dict, Any
 import tempfile
 import shutil
+
+import sys
+
+# SQLite workaround for Streamlit Cloud
+__import__('pysqlite3')
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+from langchain_community.vectorstores import Chroma
 
 def get_resume(job_description: str, resume_file, openai_api_key: str):
     """

@@ -6,7 +6,12 @@ from langchain_core.prompts import ChatPromptTemplate
 from pdf_reader import load_pdf
 from splitter import split_text_documents
 from langchain.docstore.document import Document
-import streamlit as st
+import sys
+
+# SQLite workaround for Streamlit Cloud
+__import__('pysqlite3')
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+from langchain_community.vectorstores import Chroma
 
 def get_cover_letter(job_description, pdf, openai_api_key):
     # Load resume

@@ -243,7 +243,7 @@ def render_generator_page(page_type: PageType):
                     </div>
                 """, unsafe_allow_html=True)
             
-            # Chat input area - Always visible
+            # Chat Input area - Always visible
             col1, col2 = st.columns([3, 1])
             with col1:
                 user_question = st.text_input(
