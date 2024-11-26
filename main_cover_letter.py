@@ -3,7 +3,6 @@ from langchain.vectorstores import Chroma
 from langchain.chains.retrieval import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
-import os
 from pdf_reader import load_pdf
 from splitter import split_text_documents
 from langchain.docstore.document import Document
