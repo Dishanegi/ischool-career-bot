@@ -1,6 +1,6 @@
 import streamlit as st
-from main_cover_letter import get_cover_letter
-from main_resume import get_resume
+from cover_letter_generator import get_cover_letter
+from resume_generator import get_resume
 from enum import Enum
 from typing import Callable, Tuple
 import time
@@ -10,6 +10,7 @@ class PageType(Enum):
     HOME = "Home"
     COVER_LETTER = "Cover Letter Generator"
     RESUME = "Resume Generator"
+    INTERVIEW_PREP = "Interview Preparation"
 
 def load_css(css_file):
     with open(css_file) as f:
