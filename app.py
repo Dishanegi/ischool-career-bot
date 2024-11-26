@@ -5,12 +5,16 @@ from enum import Enum
 from typing import Callable, Tuple
 import time
 import pathlib
+from audio_recorder_streamlit import audio_recorder
+from voice_chat_assistant import CoreFunctions
+from collections import deque
+import os
 
 class PageType(Enum):
     HOME = "Home"
     COVER_LETTER = "Cover Letter Generator"
     RESUME = "Resume Generator"
-    INTERVIEW_PREP = "Interview Preparation"
+    VOICE_CHAT = "Voice Chat Assistant" 
 
 def load_css(css_file):
     with open(css_file) as f:
@@ -93,9 +97,9 @@ def render_home_page():
     st.markdown("""
         <h2 class="section-header">🚀 Our Tools</h2>
     """, unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    
+
+    col1, col2, col3 = st.columns(3)
+
     with col1:
         st.markdown("""
             <div class="feature-card">
@@ -103,12 +107,20 @@ def render_home_page():
                 <p style="font-family: 'Poppins', sans-serif;">Create compelling, personalized cover letters that highlight your unique value proposition. Our AI analyzes job descriptions to craft perfect matches.</p>
             </div>
         """, unsafe_allow_html=True)
-        
+    
     with col2:
         st.markdown("""
             <div class="feature-card">
                 <h3 class="feature-title">📄 Smart Resume Optimizer</h3>
                 <p style="font-family: 'Poppins', sans-serif;">Transform your resume with AI-powered optimization. Get tailored suggestions and formatting that align with industry standards.</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        st.markdown("""
+            <div class="feature-card">
+                <h3 class="feature-title">🎙️ Voice Chat Interview Bot</h3>
+                <p style="font-family: 'Poppins', sans-serif;">Practice your interview skills with our AI-powered voice chat assistant. Get real-time feedback and improve your interview confidence.</p>
             </div>
         """, unsafe_allow_html=True)
 
@@ -160,9 +172,19 @@ def generate_document(generator_func: Callable, description: str, file, api_key:
 def render_generator_page(page_type: PageType):
     config = get_page_config()[page_type]
     
+    # Different descriptions for each page type
+    descriptions = {
+        PageType.COVER_LETTER: "Create a compelling cover letter tailored to your target job description",
+        PageType.RESUME: "Optimize your resume to match the job requirements and stand out from the crowd"
+    }
+    
+    # Add timestamp to force animation refresh
+    timestamp = int(time.time() * 1000)
+    
     st.markdown(f"""
-        <div class="title-container">
-            <h1 class="main-title" style="font-size: 3rem !important;">{config["title"]}</h1>
+        <div class="page-container animation-{timestamp}">
+            <h1 class="page-title animated-title animation-{timestamp}">{config["title"]}</h1>
+            <p class="page-subtitle animation-{timestamp}">{descriptions[page_type]}</p>
         </div>
     """, unsafe_allow_html=True)
     
@@ -305,6 +327,129 @@ def render_generator_page(page_type: PageType):
                 else:
                     generate_document(config["generator_func"], description, file, openai_api_key)
 
+def render_voice_chat_page():
+    """Render the voice chat assistant page."""
+    # Initialize session state for voice chat
+    if 'messages' not in st.session_state:
+        st.session_state.messages = []
+    if 'last_recorded_audio' not in st.session_state:
+        st.session_state.last_recorded_audio = None
+    if 'awaiting_response' not in st.session_state:
+        st.session_state.awaiting_response = False
+    if 'conversation_memory' not in st.session_state:
+        st.session_state.conversation_memory = deque(maxlen=5)
+    if 'core_functions' not in st.session_state:
+        st.session_state.core_functions = CoreFunctions(st.secrets["openai_api_key"])
+    if 'cleanup_on_start' not in st.session_state:
+        st.session_state.core_functions.cleanup_audio_files()
+        st.session_state.cleanup_on_start = True
+
+    # Add timestamp to force animation refresh
+    timestamp = int(time.time() * 1000)
+    
+    st.markdown(f"""
+        <div class="page-container animation-{timestamp}">
+            <h1 class="page-title animated-title animation-{timestamp}">AI Voice Assistant</h1>
+            <p class="page-subtitle animation-{timestamp}">Have a natural conversation with our AI assistant</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Chat history container
+    chat_container = st.container()
+
+    # Display chat interface
+    with chat_container:
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+                if "audio" in message:
+                    audio_base64 = st.session_state.core_functions.get_base64_audio(message["audio"])
+                    if audio_base64:
+                        st.markdown(
+                            f'<audio src="data:audio/mp3;base64,{audio_base64}" controls autoplay>',
+                            unsafe_allow_html=True
+                        )
+
+    # Footer with input elements
+    with st.container():
+        col1, col2 = st.columns([8, 2])
+        with col2:
+            st.markdown('<div class="voice-recorder-container">', unsafe_allow_html=True)
+            recorded_audio = audio_recorder(
+                text="",
+                recording_color="#e74c3c",
+                neutral_color="#95a5a6",
+                key="voice_recorder"
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col1:
+            text_input = st.chat_input("Type your message or use voice input...")
+
+    # Handle text input
+    if text_input and not st.session_state.awaiting_response:
+        st.session_state.awaiting_response = True
+        try:
+            response, _ = st.session_state.core_functions.process_message(
+                text_input, st.session_state.conversation_memory)
+            
+            st.session_state.messages.append({
+                "role": "user", 
+                "content": text_input
+            })
+            
+            st.session_state.messages.append({
+                "role": "assistant", 
+                "content": response
+            })
+            
+            st.session_state.conversation_memory.append({
+                "question": text_input,
+                "answer": response
+            })
+        except Exception as e:
+            st.error(f"Error processing text input: {str(e)}")
+        
+        st.session_state.awaiting_response = False
+        st.rerun()
+
+    # Handle voice input
+    if recorded_audio is not None and recorded_audio != st.session_state.last_recorded_audio:
+        st.session_state.awaiting_response = True
+        st.session_state.last_recorded_audio = recorded_audio
+        
+        try:
+            audio_file = f"audio_input_{int(time.time())}.mp3"
+            with open(audio_file, "wb") as f:
+                f.write(recorded_audio)
+
+            transcribed_text = st.session_state.core_functions.transcribe_audio(audio_file)
+            os.remove(audio_file)
+
+            response, response_audio = st.session_state.core_functions.process_message(
+                transcribed_text, st.session_state.conversation_memory, is_voice=True)
+
+            st.session_state.messages.append({
+                "role": "user", 
+                "content": f"🎤 {transcribed_text}"
+            })
+            st.session_state.messages.append({
+                "role": "assistant", 
+                "content": response,
+                "audio": response_audio
+            })
+            
+            st.session_state.conversation_memory.append({
+                "question": transcribed_text,
+                "answer": response
+            })
+            
+        except Exception as e:
+            st.error(f"Error processing voice input: {str(e)}")
+        
+        st.session_state.awaiting_response = False
+        st.rerun()
+
 def main():
     # Sidebar
     with st.sidebar:
@@ -314,6 +459,8 @@ def main():
     # Main content
     if page == PageType.HOME:
         render_home_page()
+    elif page == PageType.VOICE_CHAT:  # New condition for voice chat page
+        render_voice_chat_page()
     else:
         render_generator_page(page)
     

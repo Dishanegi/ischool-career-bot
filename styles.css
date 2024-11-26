@@ -1,9 +1,7 @@
-/* Import Fonts
----------------------------------------- */
+/* Import Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
 
-/* Animations
----------------------------------------- */
+/* Animation Keyframes */
 @keyframes titleGlow {
     0% { text-shadow: 0 0 20px rgba(255, 140, 0, 0.5); }
     50% { text-shadow: 0 0 50px rgba(255, 140, 0, 1), 0 0 100px rgba(255, 140, 0, 0.75); }
@@ -32,8 +30,18 @@
     100% { transform: translateX(0); opacity: 1; }
 }
 
-/* Body Styles with Background Image
----------------------------------------- */
+@keyframes slideInAndGlow {
+    0% { 
+        transform: translateX(-50px);
+        opacity: 0;
+    }
+    100% { 
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Base Styles */
 body {
     font-family: sans-serif;
     margin: 0;
@@ -44,18 +52,45 @@ body {
     overflow-x: hidden;
 }
 
-/* Other styles remain the same */
+[data-testid="stHeader"] {
+    background: transparent;
+}
+
+/* Animation Resets for Page Transitions */
+[class*="animation-"] {
+    animation: none;
+}
+
+/* Container Styles */
 .title-container {
     background: rgba(255, 140, 0, 0.9);
     padding: 3rem;
     border-radius: 20px;
     margin: 2rem 0;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-    animation: fadeIn 1s ease-out;
     position: relative;
     overflow: hidden;
 }
 
+.title-container[class*="animation-"] {
+    animation: fadeIn 1s ease-out;
+}
+
+.page-container {
+    background: rgba(255, 140, 0, 0.9);
+    padding: 2rem;
+    border-radius: 15px;
+    margin: 1.5rem 0;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.page-container[class*="animation-"] {
+    animation: fadeIn 1s ease-out;
+}
+
+/* Title Styles */
 .main-title {
     font-family: sans-serif;
     font-size: 5rem !important;
@@ -63,7 +98,6 @@ body {
     text-align: center;
     padding: 1.5rem 0;
     font-weight: 700;
-    animation: titleGlow 3s infinite;
     margin: 0;
     line-height: 1.2;
     letter-spacing: -1px;
@@ -71,6 +105,28 @@ body {
     -webkit-text-fill-color: white !important;
 }
 
+.main-title[class*="animation-"] {
+    animation: titleGlow 3s infinite;
+}
+
+.page-title {
+    font-family: sans-serif;
+    font-size: 2.8rem !important;
+    color: white !important;
+    text-align: center;
+    padding: 0.8rem 0;
+    font-weight: 600;
+    margin: 0;
+    line-height: 1.2;
+    letter-spacing: -0.5px;
+    -webkit-text-fill-color: white !important;
+}
+
+.page-title[class*="animation-"] {
+    animation: slideInAndGlow 1s ease-out;
+}
+
+/* Subtitle Styles */
 .subtitle {
     font-family: sans-serif;
     font-size: 2rem;
@@ -78,41 +134,25 @@ body {
     text-align: center;
     margin: 1rem 0 0 0;
     font-weight: 400;
-    animation: fadeIn 1.5s ease-out 0.3s both;
     line-height: 1.5;
 }
 
-/* Rest of animations and styles remain identical to the previous version */
-@keyframes titleGlow {
-    0% { text-shadow: 0 0 20px rgba(255, 140, 0, 0.5); }
-    50% { text-shadow: 0 0 50px rgba(255, 140, 0, 1), 0 0 100px rgba(255, 140, 0, 0.75); }
-    100% { text-shadow: 0 0 20px rgba(255, 140, 0, 0.5); }
+.subtitle[class*="animation-"] {
+    animation: fadeIn 1.5s ease-out 0.3s both;
 }
 
-@keyframes fadeIn {
-    0% { opacity: 0; transform: translateY(50px); }
-    100% { opacity: 1; transform: translateY(0); }
+.page-subtitle {
+    font-family: sans-serif;
+    font-size: 1.2rem !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+    text-align: center;
+    margin: 0.5rem 0 0 0;
+    font-weight: 400;
+    line-height: 1.4;
 }
 
-@keyframes float {
-    0% { transform: translateY(0px); }
-    50% { transform: translateY(-20px); }
-    100% { transform: translateY(0px); }
-}
-
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.2); }
-    100% { transform: scale(1); }
-}
-
-@keyframes slideIn {
-    0% { transform: translateX(-200%); opacity: 0; }
-    100% { transform: translateX(0); opacity: 1; }
-}
-
-[data-testid="stHeader"] {
-    background: transparent;
+.page-subtitle[class*="animation-"] {
+    animation: fadeIn 1.5s ease-out 0.3s both;
 }
 
 .feature-card {
@@ -266,6 +306,31 @@ body {
     background-color: #FF7000;
     transform: translateY(-2px);
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+/* Clickable cards */
+.feature-card.clickable {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.feature-card.clickable:hover {
+    transform: translateY(-10px) scale(1.02);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* Hide sidebar by default */
+[data-testid="stSidebar"] {
+    visibility: hidden;
+}
+
+/* Show sidebar when toggled */
+[data-testid="stSidebar"][aria-expanded="true"] {
+    visibility: visible;
+}
+
+/* Sidebar toggle button */
+button[kind="header"] {
+    visibility: visible !important;
 }
 
 @media (max-width: 768px) {
