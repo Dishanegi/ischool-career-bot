@@ -6,7 +6,7 @@ from typing import Callable, Tuple
 import time
 import pathlib
 from audio_recorder_streamlit import audio_recorder
-from voice_chat_assistant import CoreFunctions
+from voice_chat_assistant import VoiceAssistant
 from collections import deque
 import os
 
@@ -292,7 +292,7 @@ def render_generator_page(page_type: PageType):
                         st.session_state.chat_history.append(("assistant", response))
                         
                         # Clear the input by rerunning
-                        st.experimental_rerun()
+                        st.rerun()
                         
                 except Exception as e:
                     st.error(f"Error during chat: {str(e)}")
@@ -329,7 +329,7 @@ def render_generator_page(page_type: PageType):
 
 def render_voice_chat_page():
     """Render the voice chat assistant page."""
-    # Initialize session state for voice chat
+    # Initialize session state
     if 'messages' not in st.session_state:
         st.session_state.messages = []
     if 'last_recorded_audio' not in st.session_state:
@@ -338,41 +338,97 @@ def render_voice_chat_page():
         st.session_state.awaiting_response = False
     if 'conversation_memory' not in st.session_state:
         st.session_state.conversation_memory = deque(maxlen=5)
-    if 'core_functions' not in st.session_state:
-        st.session_state.core_functions = CoreFunctions(st.secrets["openai_api_key"])
+    if 'voice_assistant' not in st.session_state:
+        st.session_state.voice_assistant = VoiceAssistant(st.secrets["openai_api_key"])
     if 'cleanup_on_start' not in st.session_state:
-        st.session_state.core_functions.cleanup_audio_files()
+        st.session_state.voice_assistant.cleanup()
         st.session_state.cleanup_on_start = True
+    if 'resume_analyzed' not in st.session_state:
+        st.session_state.resume_analyzed = False
+    if 'interview_started' not in st.session_state:
+        st.session_state.interview_started = False
 
-    # Add timestamp to force animation refresh
     timestamp = int(time.time() * 1000)
     
     st.markdown(f"""
         <div class="page-container animation-{timestamp}">
-            <h1 class="page-title animated-title animation-{timestamp}">AI Voice Assistant</h1>
-            <p class="page-subtitle animation-{timestamp}">Have a natural conversation with our AI assistant</p>
+            <h1 class="page-title animated-title animation-{timestamp}">Interview Preparation Assistant</h1>
+            <p class="page-subtitle animation-{timestamp}">Upload your resume and start practicing for your interview</p>
         </div>
     """, unsafe_allow_html=True)
 
-    # Chat history container
-    chat_container = st.container()
+    # Resume Analysis Section (if analysis hasn't been done)
+    if not st.session_state.resume_analyzed:
+        st.markdown("### Step 1: Resume Analysis")
+        with st.form("resume_analysis_form"):
+            description = st.text_area(
+                "Enter Job Description",
+                height=200,
+                placeholder="Paste the job description here..."
+            )
+            
+            file = st.file_uploader(
+                "Upload your Resume",
+                type=["pdf"],
+                accept_multiple_files=False
+            )
+            
+            submitted = st.form_submit_button(
+                "Start Interview Prep ✨",
+                use_container_width=True
+            )
+            
+            if submitted:
+                is_valid, error_message = check_inputs(openai_api_key, description, file)
+                if not is_valid:
+                    st.error(error_message, icon='⚠')
+                else:
+                    try:
+                        with st.spinner('Analyzing your resume...'):
+                            initial_response = st.session_state.voice_assistant.initialize_interview_prep(
+                                file,
+                                description
+                            )
+                            
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": "📊 Initial Analysis:\n\n" + initial_response,
+                            })
+                            
+                            st.session_state.resume_analyzed = True
+                            st.rerun()
+                            
+                    except Exception as e:
+                        st.error(f"Error in resume analysis: {str(e)}")
 
-    # Display chat interface
-    with chat_container:
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-                if "audio" in message:
-                    audio_base64 = st.session_state.core_functions.get_base64_audio(message["audio"])
-                    if audio_base64:
-                        st.markdown(
-                            f'<audio src="data:audio/mp3;base64,{audio_base64}" controls autoplay>',
-                            unsafe_allow_html=True
-                        )
+    # Chat Interface
+    if st.session_state.resume_analyzed:
+        st.markdown("### Interactive Interview Practice")
+        
+        # Display current interview progress if interview is in progress
+        if hasattr(st.session_state.voice_assistant, 'interview_state') and \
+           st.session_state.voice_assistant.interview_state["in_progress"]:
+            current_q = st.session_state.voice_assistant.interview_state["current_question"]
+            total_q = len(st.session_state.voice_assistant.interview_state["questions"])
+            st.progress(current_q/total_q, text=f"Question {current_q + 1} of {total_q}")
+        
+        # Chat history container
+        chat_container = st.container()
+        with chat_container:
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+                    if "audio" in message:
+                        audio_base64 = st.session_state.voice_assistant.get_base64_audio(message["audio"])
+                        if audio_base64:
+                            st.markdown(
+                                f'<audio src="data:audio/mp3;base64,{audio_base64}" controls autoplay>',
+                                unsafe_allow_html=True
+                            )
 
-    # Footer with input elements
-    with st.container():
+        # Input area
         col1, col2 = st.columns([8, 2])
+        
         with col2:
             st.markdown('<div class="voice-recorder-container">', unsafe_allow_html=True)
             recorded_audio = audio_recorder(
@@ -384,71 +440,71 @@ def render_voice_chat_page():
             st.markdown('</div>', unsafe_allow_html=True)
         
         with col1:
-            text_input = st.chat_input("Type your message or use voice input...")
+            text_input = st.chat_input(
+                "Respond to the interview question or type 'yes' to start the interview..."
+            )
 
-    # Handle text input
-    if text_input and not st.session_state.awaiting_response:
-        st.session_state.awaiting_response = True
-        try:
-            response, _ = st.session_state.core_functions.process_message(
-                text_input, st.session_state.conversation_memory)
+        # Handle text input
+        if text_input and not st.session_state.awaiting_response:
+            st.session_state.awaiting_response = True
+            try:
+                response, audio_file = st.session_state.voice_assistant.chat(text_input, is_voice=True)
+                
+                st.session_state.messages.append({
+                    "role": "user",
+                    "content": text_input
+                })
+                
+                message = {
+                    "role": "assistant",
+                    "content": response
+                }
+                if audio_file:
+                    message["audio"] = audio_file
+                
+                st.session_state.messages.append(message)
+                
+            except Exception as e:
+                st.error(f"Error processing text input: {str(e)}")
             
-            st.session_state.messages.append({
-                "role": "user", 
-                "content": text_input
-            })
-            
-            st.session_state.messages.append({
-                "role": "assistant", 
-                "content": response
-            })
-            
-            st.session_state.conversation_memory.append({
-                "question": text_input,
-                "answer": response
-            })
-        except Exception as e:
-            st.error(f"Error processing text input: {str(e)}")
-        
-        st.session_state.awaiting_response = False
-        st.rerun()
+            st.session_state.awaiting_response = False
+            st.rerun()
 
-    # Handle voice input
-    if recorded_audio is not None and recorded_audio != st.session_state.last_recorded_audio:
-        st.session_state.awaiting_response = True
-        st.session_state.last_recorded_audio = recorded_audio
-        
-        try:
-            audio_file = f"audio_input_{int(time.time())}.mp3"
-            with open(audio_file, "wb") as f:
-                f.write(recorded_audio)
-
-            transcribed_text = st.session_state.core_functions.transcribe_audio(audio_file)
-            os.remove(audio_file)
-
-            response, response_audio = st.session_state.core_functions.process_message(
-                transcribed_text, st.session_state.conversation_memory, is_voice=True)
-
-            st.session_state.messages.append({
-                "role": "user", 
-                "content": f"🎤 {transcribed_text}"
-            })
-            st.session_state.messages.append({
-                "role": "assistant", 
-                "content": response,
-                "audio": response_audio
-            })
+        # Handle voice input
+        if recorded_audio is not None and recorded_audio != st.session_state.last_recorded_audio:
+            st.session_state.awaiting_response = True
+            st.session_state.last_recorded_audio = recorded_audio
             
-            st.session_state.conversation_memory.append({
-                "question": transcribed_text,
-                "answer": response
-            })
+            try:
+                audio_file = f"audio_input_{int(time.time())}.mp3"
+                with open(audio_file, "wb") as f:
+                    f.write(recorded_audio)
+
+                transcribed_text = st.session_state.voice_assistant.transcribe(audio_file)
+                os.remove(audio_file)
+
+                response, response_audio = st.session_state.voice_assistant.chat(
+                    transcribed_text, is_voice=True)
+
+                st.session_state.messages.append({
+                    "role": "user",
+                    "content": f"🎤 {transcribed_text}"
+                })
+                
+                message = {
+                    "role": "assistant",
+                    "content": response,
+                }
+                if response_audio:
+                    message["audio"] = response_audio
+                
+                st.session_state.messages.append(message)
+                
+            except Exception as e:
+                st.error(f"Error processing voice input: {str(e)}")
             
-        except Exception as e:
-            st.error(f"Error processing voice input: {str(e)}")
-        
-        st.session_state.awaiting_response = False
-        st.rerun()
+            st.session_state.awaiting_response = False
+            st.rerun()
 
 def main():
     # Sidebar
