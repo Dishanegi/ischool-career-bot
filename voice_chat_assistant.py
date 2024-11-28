@@ -180,6 +180,112 @@ class VoiceAssistant:
             return_source_documents=False
         ), memory
     
+    def _get_role_specific_questions(self, role: str) -> List[str]:
+        """Get role-specific questions from the question pool"""
+        
+        # Question pools for different roles
+        question_pools = {
+            "software_engineer": {
+                "technical": [
+                    "Can you explain how you would design a scalable microservices architecture?",
+                    "Walk me through your experience with CI/CD pipelines and deployment automation.",
+                    "How do you ensure code quality and what testing strategies do you implement?",
+                    "Describe a challenging performance issue you encountered and how you resolved it.",
+                    "How do you approach database design and optimization?"
+                ],
+                "system_design": [
+                    "How would you design a real-time notification system?",
+                    "Explain how you would design a URL shortening service.",
+                    "How would you architect a distributed caching system?"
+                ]
+            },
+            "cloud_engineer": {
+                "technical": [
+                    "Describe your experience with AWS/Azure/GCP service implementation.",
+                    "How do you handle cloud infrastructure security and compliance?",
+                    "Explain your approach to cloud cost optimization.",
+                    "How do you implement disaster recovery in cloud environments?",
+                    "Walk me through your experience with Infrastructure as Code."
+                ],
+                "system_design": [
+                    "How would you design a multi-region cloud architecture?",
+                    "Explain your approach to implementing auto-scaling.",
+                    "How would you design a zero-downtime deployment system?"
+                ]
+            },
+            "data_engineer": {
+                "technical": [
+                    "How do you design and optimize data pipelines?",
+                    "Explain your experience with real-time data processing.",
+                    "How do you handle data quality and validation?",
+                    "Describe your experience with data warehouse design.",
+                    "How do you approach data migration projects?"
+                ],
+                "system_design": [
+                    "How would you design a real-time analytics system?",
+                    "Explain your approach to building a data lake.",
+                    "How would you implement a data quality monitoring system?"
+                ]
+            }
+        }
+
+        # Common questions for all roles
+        common_questions = {
+            "leadership": [
+                "Describe a situation where you had to lead a team through a difficult project.",
+                "How do you handle conflicts within your team?",
+                "Tell me about a time when you had to influence stakeholders without direct authority.",
+                "How do you approach mentoring junior team members?",
+                "Describe how you've helped improve team processes or practices."
+            ],
+            "behavioral": [
+                "Tell me about yourself and your experience.",
+                "What interests you about this position and our company?",
+                "Where do you see yourself in 5 years?",
+                "What are your greatest professional achievements?",
+                "How do you handle pressure and tight deadlines?"
+            ],
+            "technical_challenges": [
+                "Describe the most challenging technical problem you've solved. What was your approach?",
+                "Tell me about a time when you had to make a difficult technical decision. How did you approach it?",
+                "Share an example of a project that failed. What did you learn from it?",
+                "How do you stay updated with the latest technologies in your field?"
+            ],
+            "strengths_weaknesses": [
+                "What would you consider your technical strengths? How have you applied them?",
+                "What areas of your technical expertise do you feel need improvement?",
+                "How do you overcome technical limitations or knowledge gaps?",
+                "What's your approach to learning new technologies?"
+            ],
+            "closing": [
+                "Do you have any questions about the role or company?",
+                "What are your salary expectations?",
+                "When would you be available to start?"
+            ]
+        }
+
+        # Get role-specific questions
+        role = role.lower().replace(" ", "_")
+        role_questions = []
+        if role in question_pools:
+            role_questions.extend(question_pools[role]["technical"])
+            role_questions.extend(question_pools[role]["system_design"])
+
+        # Combine with common questions
+        selected_questions = (
+            common_questions["behavioral"][:2] +
+            common_questions["leadership"][:2] +
+            role_questions[:3] +
+            common_questions["technical_challenges"][:2] +
+            common_questions["strengths_weaknesses"][:2] +
+            common_questions["closing"][:1]
+        )
+
+        return selected_questions
+
+    def _prepare_interview_questions(self, position: str, job_description: str) -> List[str]:
+        """Prepare the complete list of interview questions based on the position"""
+        return self._get_role_specific_questions(position)
 
     def initialize_interview_prep(self, resume_file, job_description: str) -> str:
         """Initialize interview preparation with resume and job description"""
@@ -233,59 +339,7 @@ class VoiceAssistant:
             if self.persist_directory and os.path.exists(self.persist_directory):
                 shutil.rmtree(self.persist_directory)
             raise Exception(f"Error in interview preparation: {str(e)}")
-    
 
-    def _generate_technical_questions(self, job_description: str) -> List[str]:
-        """Generate technical questions based on job description requirements"""
-        example_questions = {
-            "data_analysis": [
-                "Can you explain how you would use pandas to handle missing data in a large dataset?",
-                "Walk me through your process of creating a dashboard using PowerBI/Tableau.",
-                "How would you approach A/B testing for a new feature?"
-            ],
-            "software_development": [
-                "Explain how you would optimize a slow-performing SQL query.",
-                "How would you implement error handling in a REST API?",
-                "Describe your experience with containerization using Docker."
-            ],
-            "machine_learning": [
-                "How do you handle imbalanced datasets?",
-                "Explain your approach to feature selection.",
-                "How do you validate your machine learning models?"
-            ]
-        }
-
-        prompt = f"""
-        Here are some example technical interview questions for different roles:
-        {str(example_questions)}
-
-        Using these as examples, generate 3 technical questions based on these requirements from the job description:
-        {job_description}
-
-        The questions should:
-        1. Focus on technical skills specifically mentioned in the job description
-        2. Be similar in style to the example questions
-        3. Test both theoretical knowledge and practical experience
-        4. Be specific to the required technologies/tools
-
-        Format: Return just the questions, one per line.
-        """
-        
-        result = self.chain({"question": prompt})
-        return result['answer'].strip().split('\n')[:3]
-
-    def _prepare_interview_questions(self, position: str, job_description: str) -> List[str]:
-        """Prepare the complete list of interview questions"""
-        behavioral_questions = [
-            "Tell me about yourself and your experience.",
-            "Why are you interested in this position?",
-            "What makes you the best candidate for this role?"
-        ]
-
-        technical_questions = self._generate_technical_questions(job_description)
-        closing_question = ["Do you have any questions for us?"]
-
-        return behavioral_questions + technical_questions + closing_question
 
     def _generate_answer_feedback(self, question: str, answer: str) -> str:
         """Generate feedback for an interview answer"""

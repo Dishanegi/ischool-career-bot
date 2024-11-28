@@ -438,7 +438,7 @@ def render_voice_chat_page():
                                 unsafe_allow_html=True
                             )
 
-        # Combined input area
+        # Combined Input Area
         col1, col2 = st.columns([4, 1])
         
         with col1:
