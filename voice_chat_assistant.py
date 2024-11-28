@@ -81,7 +81,7 @@ class VoiceAssistant:
         """Create and configure the LangChain conversation agent"""
         llm = ChatOpenAI(
             temperature=0.4,
-            model_name='gpt-4',
+            model_name='gpt-4o-mini',
             openai_api_key=self.api_key
         )
         
@@ -133,7 +133,7 @@ class VoiceAssistant:
         """Create specialized interview chain with document context"""
         llm = ChatOpenAI(
             temperature=0.4,
-            model_name='gpt-4',
+            model_name='gpt-4o-mini',
             openai_api_key=self.api_key
         )
         

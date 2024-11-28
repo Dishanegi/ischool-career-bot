@@ -419,7 +419,17 @@ def render_voice_chat_page():
         with chat_container:
             for message in st.session_state.messages:
                 with st.chat_message(message["role"]):
-                    st.markdown(message["content"])
+                    if message["role"] == "user":
+                        # For user messages, display the transcribed text without the 🎤 emoji
+                        display_text = message["content"]
+                        if display_text.startswith("🎤 "):
+                            display_text = display_text[2:].strip()
+                        st.markdown(display_text)
+                    else:
+                        # For assistant messages, display the content as before
+                        st.markdown(message["content"])
+                    
+                    # Handle audio playback if present
                     if "audio" in message:
                         audio_base64 = st.session_state.voice_assistant.get_base64_audio(message["audio"])
                         if audio_base64:
@@ -453,16 +463,18 @@ def render_voice_chat_page():
         if text_input and not st.session_state.awaiting_response:
             st.session_state.awaiting_response = True
             try:
+                # First add the user's message
+                st.session_state.messages.append({
+                    "role": "user",
+                    "content": text_input
+                })
+                
+                # Then get and add the assistant's response
                 response, audio_file = st.session_state.voice_assistant.chat(
                     text_input,
                     input_type="text",
                     output_type="voice"
                 )
-                
-                st.session_state.messages.append({
-                    "role": "user",
-                    "content": text_input
-                })
                 
                 message = {
                     "role": "assistant",
@@ -485,17 +497,23 @@ def render_voice_chat_page():
             st.session_state.last_recorded_audio = recorded_audio
             
             try:
-                response, audio_file = st.session_state.voice_assistant.chat(
-                    recorded_audio,
-                    input_type="voice",
-                    output_type="voice"
-                )
-
+                # Get the transcription and response
+                input_text = st.session_state.voice_assistant.process_input(recorded_audio, input_type="voice")
+                
+                # Add the transcribed user message with the 🎤 emoji
                 st.session_state.messages.append({
                     "role": "user",
-                    "content": f"🎤 {response}"
+                    "content": f"🎤 {input_text}"
                 })
                 
+                # Get assistant's response
+                response, audio_file = st.session_state.voice_assistant.chat(
+                    input_text,
+                    input_type="text",  # Already transcribed, so treat as text
+                    output_type="voice"
+                )
+                
+                # Add the assistant's response
                 message = {
                     "role": "assistant",
                     "content": response,
