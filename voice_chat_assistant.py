@@ -81,7 +81,7 @@ class VoiceAssistant:
         """Create and configure the LangChain conversation agent"""
         llm = ChatOpenAI(
             temperature=0.4,
-            model_name='gpt-4',
+            model_name='gpt-4o-mini',
             openai_api_key=self.api_key
         )
         
@@ -180,7 +180,6 @@ class VoiceAssistant:
             return_source_documents=False
         ), memory
     
-
     def initialize_interview_prep(self, resume_file, job_description: str) -> str:
         """Initialize interview preparation with resume and job description"""
         self.persist_directory = tempfile.mkdtemp()
@@ -234,7 +233,6 @@ class VoiceAssistant:
                 shutil.rmtree(self.persist_directory)
             raise Exception(f"Error in interview preparation: {str(e)}")
     
-
     def _generate_technical_questions(self, job_description: str) -> List[str]:
         """Generate technical questions based on job description requirements"""
         example_questions = {
@@ -287,46 +285,163 @@ class VoiceAssistant:
 
         return behavioral_questions + technical_questions + closing_question
 
+    def _get_relevant_context(self, question: str, answer: str) -> Dict[str, str]:
+        """Get highly relevant context from resume and job description"""
+        # Create specific queries based on question type
+        queries = {
+            "technical": f"""
+                Find technical skills and experience related to:
+                Question: {question}
+                Answer topics: {answer[:100]}
+            """,
+            "experience": f"""
+                Find relevant work experience and achievements related to:
+                Question: {question}
+                Answer topics: {answer[:100]}
+            """,
+            "requirements": f"""
+                Find specific job requirements related to:
+                Question: {question}
+                Answer topics: {answer[:100]}
+            """
+        }
+        
+        context = {}
+        for query_type, query in queries.items():
+            results = self.vectordb.similarity_search(
+                query,
+                k=3  # Get top 3 most relevant chunks
+            )
+            context[query_type] = "\n".join([doc.page_content for doc in results])
+        
+        return context
+        
+        context = {}
+        for query_type, query in queries.items():
+            results = self.vectordb.similarity_search(
+                query,
+                k=2,  # Get top 2 most relevant chunks
+                fetch_k=4  # Consider top 4 before selecting
+            )
+            context[query_type] = "\n".join([doc.page_content for doc in results])
+        
+        return context
+
     def _generate_answer_feedback(self, question: str, answer: str) -> str:
-        """Generate feedback for an interview answer"""
+        """Generate brutally honest feedback for an interview answer"""
+        # Get targeted context for this specific Q&A
+        context = self._get_relevant_context(question, answer)
+        
         feedback_prompt = f"""
-        Analyze this interview response and provide constructive feedback:
+        You are a brutally honest interview coach. Analyze this response based on concrete evidence from 
+        the candidate's background and job requirements.
 
-        Question: {question}
-        Answer: {answer}
+        TECHNICAL BACKGROUND FROM RESUME:
+        {context['technical']}
 
-        Provide feedback on:
-        1. Content relevance and completeness
-        2. Structure and clarity of response
-        3. Technical accuracy (if technical question)
-        4. Specific improvement suggestions
+        RELEVANT EXPERIENCE:
+        {context['experience']}
 
-        Keep feedback professional and actionable. Be honest but encouraging.
+        JOB REQUIREMENTS:
+        {context['requirements']}
+
+        QUESTION: {question}
+        CANDIDATE'S ANSWER: {answer}
+
+        Provide ruthlessly honest feedback focused on:
+
+        1. Factual Accuracy:
+        - Compare claimed technical knowledge against their actual background
+        - Identify any misalignment between stated experience and resume
+        - Point out any technical inaccuracies or oversimplifications
+
+        2. Requirements Alignment:
+        - How well does their answer match the job's specific needs?
+        - Are they missing crucial requirements mentioned in the job description?
+        - Are they emphasizing irrelevant skills or experiences?
+
+        3. Evidence-Based Critique:
+        - What claims in their answer are NOT supported by their resume?
+        - Which required skills are they failing to demonstrate?
+        - Where are they overselling vs. underselling their actual experience?
+
+        4. Specific Deficiencies:
+        - List exact points where the answer falls short
+        - Identify specific missing technical details they should know
+        - Point out any vague or evasive parts of their response
+
+        Format as:
+        CLAIMS VS REALITY: (compare answer claims against actual background)
+        CRITICAL GAPS: (specific missing elements from job requirements)
+        REQUIRED IMPROVEMENTS: (exact changes needed with examples)
+
+        Be merciless with accuracy but back all criticism with specific evidence from their background or the job requirements.
         """
         
         result = self.chain({"question": feedback_prompt})
         return result['answer']
 
     def _generate_final_feedback(self) -> str:
-        """Generate comprehensive feedback after all questions"""
+        """Generate comprehensive brutally honest final feedback"""
+        # Get complete context from all documents
+        all_context = self._get_relevant_context(
+            "overall performance",
+            str(self.interview_state['answers'])
+        )
+        
         final_feedback_prompt = f"""
-        Review the entire interview performance:
+        You are a brutally honest interview coach providing final feedback based on concrete evidence.
 
+        CANDIDATE'S TECHNICAL BACKGROUND:
+        {all_context['technical']}
+
+        CANDIDATE'S EXPERIENCE:
+        {all_context['experience']}
+
+        JOB REQUIREMENTS:
+        {all_context['requirements']}
+
+        FULL INTERVIEW PERFORMANCE:
         Questions and Answers:
         {str(self.interview_state['answers'])}
 
-        Individual Feedback:
+        Previous Feedback:
         {str(self.interview_state['feedback'])}
 
-        Provide a comprehensive evaluation including:
-        1. Overall interview performance
-        2. Key strengths demonstrated
-        3. Specific areas needing improvement
-        4. Technical competency assessment
-        5. Communication style feedback
-        6. Actionable recommendations for future interviews
+        Provide a ruthlessly honest final evaluation:
 
-        Be direct and specific in your feedback, highlighting both positives and areas for growth.
+        1. Requirements Gap Analysis:
+        - List each key job requirement and rate their demonstrated competency
+        - Identify critical missing skills or experiences
+        - Compare their level against expected seniority
+
+        2. Technical Competency Evaluation:
+        - Analyze depth of technical knowledge against claimed expertise
+        - List specific technical areas where they fell short
+        - Compare technical skills against job requirements
+
+        3. Experience Verification:
+        - Cross-reference interview claims against actual resume experience
+        - Identify any credibility issues or exaggerations
+        - Assess relevance of their experience to this role
+
+        4. Critical Issues and Risks:
+        - List potential red flags for hiring managers
+        - Identify gaps that could prevent success in role
+        - Point out any concerning patterns in responses
+
+        5. Required Preparation Plan:
+        - Prioritize specific areas requiring immediate improvement
+        - List exact topics they need to study/practice
+        - Identify what experience they need to gain
+
+        Conclude with:
+        1. Clear hiring readiness assessment
+        2. Estimate of time needed to become fully qualified
+        3. Direct statement about pursuing this role now vs. later
+
+        Base all feedback on specific evidence from their resume, answers, and job requirements.
+        Be brutally honest about their current readiness for this role.
         """
         
         result = self.chain({"question": final_feedback_prompt})

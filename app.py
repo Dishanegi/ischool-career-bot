@@ -349,6 +349,8 @@ def render_voice_chat_page():
         st.session_state.interview_started = False
     if 'input_mode' not in st.session_state:  # New state for tracking input mode
         st.session_state.input_mode = "text"
+    if 'text_key' not in st.session_state:
+        st.session_state.text_key = 0
 
     timestamp = int(time.time() * 1000)
     
@@ -403,13 +405,12 @@ def render_voice_chat_page():
                     except Exception as e:
                         st.error(f"Error in resume analysis: {str(e)}")
 
-     # Chat Interface
     if st.session_state.resume_analyzed:
         st.markdown("### Interactive Interview Practice")
         
-        # Display current interview progress if interview is in progress
-        if hasattr(st.session_state.voice_assistant, 'interview_state') and \
-        st.session_state.voice_assistant.interview_state["in_progress"]:
+        # Display interview progress if in progress
+        if (hasattr(st.session_state.voice_assistant, 'interview_state') and 
+            st.session_state.voice_assistant.interview_state["in_progress"]):
             current_q = st.session_state.voice_assistant.interview_state["current_question"]
             total_q = len(st.session_state.voice_assistant.interview_state["questions"])
             st.progress(current_q/total_q, text=f"Question {current_q + 1} of {total_q}")
@@ -428,42 +429,52 @@ def render_voice_chat_page():
                                 unsafe_allow_html=True
                             )
 
-        # Combined input area
+        # Input area
         col1, col2 = st.columns([4, 1])
         
         with col1:
-            # Text input with unique key
-            text_input = st.chat_input(
-                "Respond to the interview question or type 'yes' to start the interview...",
-                key="chat_input_unique"
+            # Customize placeholder based on interview state
+            placeholder_text = ("Type 'yes' to start the interview" 
+                            if not st.session_state.voice_assistant.interview_state["in_progress"]
+                            else "Type your response...")
+            
+            # Use the counter in the key
+            text_input = st.text_input(
+                "",  # Remove label
+                placeholder=placeholder_text,
+                key=f"text_input_key_{st.session_state.text_key}",
             )
+            submit_button = st.button("Send", use_container_width=True, key="submit_button")
+
             
         with col2:
-            # Voice recorder
             st.markdown('<div class="voice-recorder-container" style="margin-top: 10px;">', unsafe_allow_html=True)
             recorded_audio = audio_recorder(
-                text="",  # Remove text to show just the button
+                text="",
                 recording_color="#e74c3c",
                 neutral_color="#95a5a6",
                 key="voice_recorder"
             )
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # Handle text input
-        if text_input and not st.session_state.awaiting_response:
+        # Handle text input with submit button
+        if submit_button and text_input and not st.session_state.awaiting_response:
             st.session_state.awaiting_response = True
             try:
+                # Process the text input
                 response, audio_file = st.session_state.voice_assistant.chat(
                     text_input,
                     input_type="text",
                     output_type="voice"
                 )
                 
+                # Add user message to chat history
                 st.session_state.messages.append({
                     "role": "user",
                     "content": text_input
                 })
                 
+                # Add assistant response to chat history
                 message = {
                     "role": "assistant",
                     "content": response
@@ -473,11 +484,16 @@ def render_voice_chat_page():
                 
                 st.session_state.messages.append(message)
                 
+                # Increment the key counter to force a new text input
+                st.session_state.text_key += 1
+                
+                # Use rerun to refresh the page
+                st.rerun()
+                
             except Exception as e:
                 st.error(f"Error processing text input: {str(e)}")
-            
-            st.session_state.awaiting_response = False
-            st.rerun()
+            finally:
+                st.session_state.awaiting_response = False
 
         # Handle voice input
         if recorded_audio is not None and recorded_audio != st.session_state.last_recorded_audio:
