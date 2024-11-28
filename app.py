@@ -347,6 +347,8 @@ def render_voice_chat_page():
         st.session_state.resume_analyzed = False
     if 'interview_started' not in st.session_state:
         st.session_state.interview_started = False
+    if 'input_mode' not in st.session_state:  # New state for tracking input mode
+        st.session_state.input_mode = "text"
 
     timestamp = int(time.time() * 1000)
     
@@ -401,17 +403,17 @@ def render_voice_chat_page():
                     except Exception as e:
                         st.error(f"Error in resume analysis: {str(e)}")
 
-    # Chat Interface
+     # Chat Interface
     if st.session_state.resume_analyzed:
         st.markdown("### Interactive Interview Practice")
         
         # Display current interview progress if interview is in progress
         if hasattr(st.session_state.voice_assistant, 'interview_state') and \
-           st.session_state.voice_assistant.interview_state["in_progress"]:
+        st.session_state.voice_assistant.interview_state["in_progress"]:
             current_q = st.session_state.voice_assistant.interview_state["current_question"]
             total_q = len(st.session_state.voice_assistant.interview_state["questions"])
             st.progress(current_q/total_q, text=f"Question {current_q + 1} of {total_q}")
-        
+
         # Chat history container
         chat_container = st.container()
         with chat_container:
@@ -426,29 +428,36 @@ def render_voice_chat_page():
                                 unsafe_allow_html=True
                             )
 
-        # Input area
-        col1, col2 = st.columns([8, 2])
+        # Combined input area
+        col1, col2 = st.columns([4, 1])
         
+        with col1:
+            # Text input with unique key
+            text_input = st.chat_input(
+                "Respond to the interview question or type 'yes' to start the interview...",
+                key="chat_input_unique"
+            )
+            
         with col2:
-            st.markdown('<div class="voice-recorder-container">', unsafe_allow_html=True)
+            # Voice recorder
+            st.markdown('<div class="voice-recorder-container" style="margin-top: 10px;">', unsafe_allow_html=True)
             recorded_audio = audio_recorder(
-                text="",
+                text="",  # Remove text to show just the button
                 recording_color="#e74c3c",
                 neutral_color="#95a5a6",
                 key="voice_recorder"
             )
             st.markdown('</div>', unsafe_allow_html=True)
-        
-        with col1:
-            text_input = st.chat_input(
-                "Respond to the interview question or type 'yes' to start the interview..."
-            )
 
         # Handle text input
         if text_input and not st.session_state.awaiting_response:
             st.session_state.awaiting_response = True
             try:
-                response, audio_file = st.session_state.voice_assistant.chat(text_input, is_voice=True)
+                response, audio_file = st.session_state.voice_assistant.chat(
+                    text_input,
+                    input_type="text",
+                    output_type="voice"
+                )
                 
                 st.session_state.messages.append({
                     "role": "user",
@@ -476,27 +485,23 @@ def render_voice_chat_page():
             st.session_state.last_recorded_audio = recorded_audio
             
             try:
-                audio_file = f"audio_input_{int(time.time())}.mp3"
-                with open(audio_file, "wb") as f:
-                    f.write(recorded_audio)
-
-                transcribed_text = st.session_state.voice_assistant.transcribe(audio_file)
-                os.remove(audio_file)
-
-                response, response_audio = st.session_state.voice_assistant.chat(
-                    transcribed_text, is_voice=True)
+                response, audio_file = st.session_state.voice_assistant.chat(
+                    recorded_audio,
+                    input_type="voice",
+                    output_type="voice"
+                )
 
                 st.session_state.messages.append({
                     "role": "user",
-                    "content": f"🎤 {transcribed_text}"
+                    "content": f"🎤 {response}"
                 })
                 
                 message = {
                     "role": "assistant",
                     "content": response,
                 }
-                if response_audio:
-                    message["audio"] = response_audio
+                if audio_file:
+                    message["audio"] = audio_file
                 
                 st.session_state.messages.append(message)
                 

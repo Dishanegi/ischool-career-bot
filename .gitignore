@@ -162,3 +162,4 @@ cython_debug/
 #.idea/
 cv.pdf
 .streamlit/secrets.toml
+audio_files

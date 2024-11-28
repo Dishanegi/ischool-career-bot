@@ -4,7 +4,7 @@ import base64
 import time
 import tempfile
 import shutil
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional, Union
 from langchain_community.chat_models import ChatOpenAI
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_core.prompts import PromptTemplate
@@ -30,6 +30,9 @@ class VoiceAssistant:
         self.chain, self.memory = self._create_langchain_agent()
         self.vectordb = None
         self.persist_directory = None
+        # Create audio_files directory if it doesn't exist
+        self.audio_directory = "audio_files"
+        os.makedirs(self.audio_directory, exist_ok=True)
         self.interview_state = {
             "in_progress": False,
             "current_question": 0,
@@ -40,6 +43,40 @@ class VoiceAssistant:
             "feedback": []
         }
         
+    def process_input(self, input_data: Union[str, bytes], input_type: str = "text") -> str:
+        """Process either text or voice input and return the text response"""
+        if input_type == "voice" and isinstance(input_data, bytes):
+            # Save voice input to audio_files directory
+            temp_audio = os.path.join(self.audio_directory, f"audio_input_{int(time.time())}.mp3")
+            with open(temp_audio, "wb") as f:
+                f.write(input_data)
+            
+            try:
+                # Transcribe voice to text
+                input_text = self.transcribe(temp_audio)
+                os.remove(temp_audio)  # Clean up temp file
+                return input_text
+            except Exception as e:
+                if os.path.exists(temp_audio):
+                    os.remove(temp_audio)
+                raise Exception(f"Error processing voice input: {str(e)}")
+        
+        return input_data 
+    
+    def handle_response(self, response: str, output_type: str = "text") -> Tuple[str, Optional[str]]:
+        """Handle the response in either text or voice format"""
+        if output_type == "voice":
+            audio_file = os.path.join(self.audio_directory, f"audio_response_{int(time.time())}.mp3")
+            try:
+                self._text_to_audio(response, audio_file)
+                return response, audio_file
+            except Exception as e:
+                if os.path.exists(audio_file):
+                    os.remove(audio_file)
+                raise Exception(f"Error generating voice response: {str(e)}")
+        
+        return response, None
+
     def _create_langchain_agent(self) -> Tuple[LLMChain, ConversationBufferMemory]:
         """Create and configure the LangChain conversation agent"""
         llm = ChatOpenAI(
@@ -295,13 +332,15 @@ class VoiceAssistant:
         result = self.chain({"question": final_feedback_prompt})
         return result['answer']
 
-    def chat(self, input_text: str, is_voice: bool = False) -> Tuple[str, Optional[str]]:
-        """Process a message and optionally convert to voice"""
+    def chat(self, input_data: Union[str, bytes], input_type: str = "text", output_type: str = "text") -> Tuple[str, Optional[str]]:
+        """Process a message and handle both voice and text input/output"""
         try:
+            # Process input (voice or text)
+            input_text = self.process_input(input_data, input_type)
             response = ""
             
             if isinstance(self.chain, ConversationalRetrievalChain):
-                if input_text.lower() in ['yes', 'y'] and not self.interview_state["in_progress"]:
+                if input_text.lower().strip() in ['yes', 'y'] and not self.interview_state["in_progress"]:
                     # Start mock interview
                     self.interview_state["in_progress"] = True
                     self.interview_state["current_question"] = 0
@@ -321,7 +360,7 @@ class VoiceAssistant:
                     current_q = self.interview_state["questions"][self.interview_state["current_question"]]
                     self.interview_state["answers"][current_q] = input_text
                     
-                    # Get feedback for the answer
+                    # Get feedback
                     feedback = self._generate_answer_feedback(current_q, input_text)
                     self.interview_state["feedback"].append(feedback)
                     
@@ -337,7 +376,7 @@ class VoiceAssistant:
                         response = f"Interview completed! Here's your comprehensive feedback:\n\n{final_feedback}"
                         self.interview_state["in_progress"] = False
                 
-                elif input_text.lower() in ['no', 'n']:
+                elif input_text.lower().strip() in ['no', 'n']:
                     response = self.chain({
                         "question": "No problem. Feel free to ask any specific questions, or let me know when you're ready to practice interviewing."
                     })['answer']
@@ -346,12 +385,8 @@ class VoiceAssistant:
             else:
                 response = self.chain.predict(human_input=input_text)
             
-            if is_voice:
-                audio_file = f"audio_response_{int(time.time())}.mp3"
-                self._text_to_audio(response, audio_file)
-                return response, audio_file
-            
-            return response, None
+            # Handle output (voice or text)
+            return self.handle_response(response, output_type)
             
         except Exception as e:
             raise Exception(f"Error processing message: {str(e)}")
@@ -397,13 +432,15 @@ class VoiceAssistant:
             shutil.rmtree(self.persist_directory)
             
         try:
-            for file in os.listdir():
-                if (file.startswith("audio_input_") or 
-                    file.startswith("audio_response_")) and file.endswith(".mp3"):
-                    try:
-                        os.remove(file)
-                    except Exception as e:
-                        print(f"Could not remove audio file {file}: {str(e)}")
+            # Clean up audio files from the audio_files directory
+            if os.path.exists(self.audio_directory):
+                for file in os.listdir(self.audio_directory):
+                    if (file.startswith("audio_input_") or 
+                        file.startswith("audio_response_")) and file.endswith(".mp3"):
+                        try:
+                            os.remove(os.path.join(self.audio_directory, file))
+                        except Exception as e:
+                            print(f"Could not remove audio file {file}: {str(e)}")
         except Exception as e:
             print(f"Error during audio cleanup: {str(e)}")
 
