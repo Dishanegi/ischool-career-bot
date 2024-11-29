@@ -179,9 +179,9 @@ class VoiceAssistant:
             memory=memory,
             return_source_documents=False
         ), memory
-    
-    def _get_role_specific_questions(self, role: str) -> List[str]:
-        """Get role-specific questions from the question pool"""
+
+    def _prepare_interview_questions(self, position: str, job_description: str) -> List[str]:
+        """Prepare a mixed list of questions with behavioral first, then technical"""
         
         # Question pools for different roles
         question_pools = {
@@ -228,64 +228,44 @@ class VoiceAssistant:
                 ]
             }
         }
-
-        # Common questions for all roles
-        common_questions = {
-            "leadership": [
-                "Describe a situation where you had to lead a team through a difficult project.",
-                "How do you handle conflicts within your team?",
-                "Tell me about a time when you had to influence stakeholders without direct authority.",
-                "How do you approach mentoring junior team members?",
-                "Describe how you've helped improve team processes or practices."
-            ],
-            "behavioral": [
-                "Tell me about yourself and your experience.",
-                "What interests you about this position and our company?",
-                "Where do you see yourself in 5 years?",
-                "What are your greatest professional achievements?",
-                "How do you handle pressure and tight deadlines?"
-            ],
-            "technical_challenges": [
-                "Describe the most challenging technical problem you've solved. What was your approach?",
-                "Tell me about a time when you had to make a difficult technical decision. How did you approach it?",
-                "Share an example of a project that failed. What did you learn from it?",
-                "How do you stay updated with the latest technologies in your field?"
-            ],
-            "strengths_weaknesses": [
-                "What would you consider your technical strengths? How have you applied them?",
-                "What areas of your technical expertise do you feel need improvement?",
-                "How do you overcome technical limitations or knowledge gaps?",
-                "What's your approach to learning new technologies?"
-            ],
-            "closing": [
-                "Do you have any questions about the role or company?",
-                "What are your salary expectations?",
-                "When would you be available to start?"
-            ]
-        }
-
-        # Get role-specific questions
-        role = role.lower().replace(" ", "_")
-        role_questions = []
+        
+        # Must-ask behavioral questions first
+        behavioral_questions = [
+            "Tell me about yourself and your experience.",
+            "What interests you about this position and our company?",
+            "Describe a situation where you had to lead a team through a difficult project.",
+            "Tell me about a challenging technical problem you've solved. What was your approach?"
+        ]
+        
+        # Get role-specific technical questions
+        role = position.lower().replace(" ", "_")
+        technical_questions = []
         if role in question_pools:
-            role_questions.extend(question_pools[role]["technical"])
-            role_questions.extend(question_pools[role]["system_design"])
-
-        # Combine with common questions
-        selected_questions = (
-            common_questions["behavioral"][:2] +
-            common_questions["leadership"][:2] +
-            role_questions[:3] +
-            common_questions["technical_challenges"][:2] +
-            common_questions["strengths_weaknesses"][:2] +
-            common_questions["closing"][:1]
+            # Get both technical and system design questions
+            technical_questions = (
+                question_pools[role]["technical"][:3] +  # 3 technical questions
+                question_pools[role]["system_design"][:2]  # 2 system design questions
+            )
+        
+        # One strength/weakness question
+        evaluation_question = [
+            "What would you consider your technical strengths and areas for improvement?"
+        ]
+        
+        # Closing question
+        closing_question = [
+            "Do you have any questions about the role or company?"
+        ]
+        
+        # Combine in specific order
+        final_questions = (
+            behavioral_questions +  # First 4 questions are behavioral
+            technical_questions +   # Then technical based on role
+            evaluation_question +   # Then strengths/weaknesses
+            closing_question       # End with closing question
         )
-
-        return selected_questions
-
-    def _prepare_interview_questions(self, position: str, job_description: str) -> List[str]:
-        """Prepare the complete list of interview questions based on the position"""
-        return self._get_role_specific_questions(position)
+        
+        return final_questions
 
     def initialize_interview_prep(self, resume_file, job_description: str) -> str:
         """Initialize interview preparation with resume and job description"""
@@ -340,47 +320,254 @@ class VoiceAssistant:
                 shutil.rmtree(self.persist_directory)
             raise Exception(f"Error in interview preparation: {str(e)}")
 
-
     def _generate_answer_feedback(self, question: str, answer: str) -> str:
-        """Generate feedback for an interview answer"""
-        feedback_prompt = f"""
-        Analyze this interview response and provide constructive feedback:
-
+        """Generate brutally honest, ultra-concise feedback"""
+        resume_context = self.vectordb.similarity_search(question, k=3)
+        resume_text = "\n".join([doc.page_content for doc in resume_context])
+        
+        # Prefix enforces the input format and rules
+        prefix = f"""
         Question: {question}
         Answer: {answer}
+        Resume: {resume_text}
+        Job: {self.interview_state['job_description']}
 
-        Provide feedback on:
-        1. Content relevance and completeness
-        2. Structure and clarity of response
-        3. Technical accuracy (if technical question)
-        4. Specific improvement suggestions
+        RULES:
+        - Each point must show [resume proof] vs [answer given] vs [job need]
+        - BRUTAL HONESTY: Call out any weak/missing points immediately
+        - ULTRA CONCISE: Maximum 50 words per point
+        - NO SOFT LANGUAGE: Use direct, harsh feedback
+        - EVIDENCE ONLY: Only provable points from resume/answer
+        """
 
-        Keep feedback professional and actionable. Be honest but encouraging.
+        # Suffix enforces brutal feedback format
+        suffix = """
+        FORMAT RULES:
+        - GOOD points: "Used [exact skill] for [specific need]"
+        - MISS points: "Have [proven skill] but [failed requirement]"
+        - Maximum 2 GOOD, 2 MISS
+        - No explanation, no context, no advice
+        - BRUTAL HONESTY REQUIRED
+        """
+
+        # Behavioral Questions
+        if "tell me about yourself" in question.lower():
+            feedback_prompt = f"""
+            {prefix}
+
+            GOOD:
+            • Used [role/skill from resume] for [exact job requirement]
+            • Showed [past experience] solving [company's current need]
+
+            MISS:
+            • Have [key experience] but omitted [critical requirement]
+            • Resume shows [achievement] but didn't mention impact
+
+            {suffix}
+            """
+
+        elif "interests you" in question.lower() or "why this position" in question.lower():
+            feedback_prompt = f"""
+            {prefix}
+
+            GOOD:
+            • Connected [resume skill] to [company's exact need]
+            • Matched [project experience] with [current challenge]
+
+            MISS:
+            • Have [background] but ignored [tech stack match]
+            • Resume shows [experience] but missed [role fit]
+
+            {suffix}
+            """
+
+        elif "strengths" in question.lower() and "improvement" in question.lower():
+            feedback_prompt = f"""
+            {prefix}
+
+            GOOD:
+            • Proved [strength] with [concrete project result]
+            • Named [weakness] matching [non-critical skill]
+
+            MISS:
+            • Claimed [weak skill] despite [stronger resume evidence]
+            • Admitted weakness in [critical job requirement]
+
+            {suffix}
+            """
+
+        elif "difficult project" in question.lower() or "challenging project" in question.lower():
+            feedback_prompt = f"""
+            {prefix}
+
+            GOOD:
+            • Used [specific project] proving [required skill]
+            • Showed [technical win] solving [relevant challenge]
+
+            MISS:
+            • Ignored [stronger project] for [key requirement]
+            • Skipped [measurable outcome] from resume
+
+            {suffix}
+            """
+
+        # Technical Questions
+        elif "design" in question.lower() or "architecture" in question.lower():
+            feedback_prompt = f"""
+            {prefix}
+
+            GOOD:
+            • Applied [architecture experience] to [design need]
+            • Used [technical skill] for [scaling requirement]
+
+            MISS:
+            • Have [design experience] but skipped [system requirement]
+            • Resume shows [tech skill] but missed [design challenge]
+
+            {suffix}
+            """
+
+        elif "technical problem" in question.lower():
+            feedback_prompt = f"""
+            {prefix}
+
+            GOOD:
+            • Used [problem-solving method] for [technical need]
+            • Applied [technical skill] to [specific challenge]
+
+            MISS:
+            • Have [relevant solution] but no methodology shown
+            • Resume proves [skill] but impact not demonstrated
+
+            {suffix}
+            """
+
+        elif "team" in question.lower() or "lead" in question.lower():
+            feedback_prompt = f"""
+            {prefix}
+
+            GOOD:
+            • Showed [leadership win] matching [team need]
+            • Used [project example] proving [management skill]
+
+            MISS:
+            • Have [team experience] but skipped [leadership requirement]
+            • Resume shows [management win] without metrics
+
+            {suffix}
+            """
+
+        elif any(keyword in question.lower() for keyword in ["implement", "develop", "code", "programming", "testing"]):
+            feedback_prompt = f"""
+            {prefix}
+
+            GOOD:
+            • Applied [coding skill] to [implementation need]
+            • Showed [technical ability] matching [job requirement]
+
+            MISS:
+            • Have [technical experience] but no practical example
+            • Resume shows [dev skill] without methodology
+
+            {suffix}
+            """
+
+        else:
+            feedback_prompt = f"""
+            {prefix}
+
+            GOOD:
+            • Used [technical skill] for [exact requirement]
+            • Proved [experience] matching [job need]
+
+            MISS:
+            • Have [relevant skill] but didn't apply to [requirement]
+            • Resume shows [capability] without proof
+
+            {suffix}
+            """
+
+        result = self.chain({
+            "question": feedback_prompt
+        })
+
+        # Get the response and clean it
+        response = result['answer'].strip()
+        
+        # Ensure GOOD section exists
+        if not response.startswith('GOOD:'):
+            response = "GOOD:\n" + response
+        
+        # Only include MISS if it exists in the response
+        if "MISS:" in response:
+            # Split into sections and clean up
+            parts = response.split("MISS:")
+            good_section = parts[0].strip()
+            miss_section = parts[1].strip()
+            
+            # Only include MISS section if it has actual content
+            if miss_section and any(line.strip() for line in miss_section.split('\n')):
+                return f"{good_section}\n\nMISS:\n{miss_section}"
+            else:
+                return good_section
+        
+        return response
+
+    def _generate_closing_question_feedback(self, questions_asked: str) -> str:
+        """Special feedback for questions asked by candidate about role/company"""
+        resume_context = self.vectordb.similarity_search(self.interview_state['job_description'], k=3)
+        resume_text = "\n".join([doc.page_content for doc in resume_context])
+        
+        feedback_prompt = f"""
+        Based on:
+        - Questions Asked: {questions_asked}
+        - Resume: {resume_text}
+        - Job Requirements: {self.interview_state['job_description']}
+
+        Evaluate the candidate's questions about the role/company. Provide ultra-compact feedback in exactly this format:
+
+        STRONG QUESTIONS:
+        • Connected [specific resume skill/experience] to question about [specific job/project requirement]
+        • Demonstrated knowledge of [company/project aspect] relevant to [specific job requirement]
+
+        MISSING OPPORTUNITIES:
+        • Could ask about [specific job/project requirement] based on [resume experience]
+        • Should explore [specific technical aspect] given [resume background]
+
+        Rules:
+        - Max 2 strong points, max 2 missing points
+        - Each point must connect questions to resume and job requirements
+        - Focus on technical depth and project/role relevance
+        - One line per point only
         """
         
         result = self.chain({"question": feedback_prompt})
         return result['answer']
 
     def _generate_final_feedback(self) -> str:
-        """Generate comprehensive feedback after all questions"""
+        resume_context = self.vectordb.similarity_search(
+            self.interview_state['job_description'], 
+            k=5
+        )
+        resume_text = "\n".join([doc.page_content for doc in resume_context])
+        
         final_feedback_prompt = f"""
-        Review the entire interview performance:
+        Resume: {resume_text}
+        Job Needs: {self.interview_state['job_description']}
+        Answers: {str(self.interview_state['answers'])}
 
-        Questions and Answers:
-        {str(self.interview_state['answers'])}
+        One-line verdict on readiness.
 
-        Individual Feedback:
-        {str(self.interview_state['feedback'])}
+        PROVED: (2 max)
+        "Showed [X experience] for [Y requirement]"
 
-        Provide a comprehensive evaluation including:
-        1. Overall interview performance
-        2. Key strengths demonstrated
-        3. Specific areas needing improvement
-        4. Technical competency assessment
-        5. Communication style feedback
-        6. Actionable recommendations for future interviews
+        MISSED: (3 max)
+        "Have [X] but showed [Y weakness]"
 
-        Be direct and specific in your feedback, highlighting both positives and areas for growth.
+        FIX: (3 max)
+        "Use [X experience] for [Y requirement]"
+
+        Connect every point to resume + job needs. Brutal honesty.
         """
         
         result = self.chain({"question": final_feedback_prompt})
@@ -389,13 +576,13 @@ class VoiceAssistant:
     def chat(self, input_data: Union[str, bytes], input_type: str = "text", output_type: str = "text") -> Tuple[str, Optional[str]]:
         """Process a message and handle both voice and text input/output"""
         try:
-            # Process input (voice or text)
             input_text = self.process_input(input_data, input_type)
             response = ""
+            print("\n=== Debug Info ===")  # Debug line
+            print(f"Input received: {input_text[:100]}...")  # Debug line
             
             if isinstance(self.chain, ConversationalRetrievalChain):
                 if input_text.lower().strip() in ['yes', 'y'] and not self.interview_state["in_progress"]:
-                    # Start mock interview
                     self.interview_state["in_progress"] = True
                     self.interview_state["current_question"] = 0
                     self.interview_state["questions"] = self._prepare_interview_questions(
@@ -408,41 +595,67 @@ class VoiceAssistant:
                         "Take your time to answer each question thoroughly.\n\n"
                         "First question: " + self.interview_state["questions"][0]
                     )
+                    print(f"Starting interview with question: {self.interview_state['questions'][0]}")  # Debug
                 
                 elif self.interview_state["in_progress"]:
-                    # Store the answer
                     current_q = self.interview_state["questions"][self.interview_state["current_question"]]
+                    print(f"\nCurrent question ({self.interview_state['current_question']}): {current_q}")  # Debug
+                    
+                    # Store the answer
                     self.interview_state["answers"][current_q] = input_text
+                    print(f"Stored answer: {input_text[:100]}...")  # Debug
                     
-                    # Get feedback
-                    feedback = self._generate_answer_feedback(current_q, input_text)
-                    self.interview_state["feedback"].append(feedback)
+                    # Generate feedback
+                    try:
+                        if current_q == "Do you have any questions about the role or company?":
+                            print("Generating closing feedback...")  # Debug
+                            feedback = self._generate_closing_question_feedback(input_text)
+                        else:
+                            print("Generating standard feedback...")  # Debug
+                            feedback = self._generate_answer_feedback(current_q, input_text)
+                        
+                        print(f"\nGenerated feedback: {feedback}")  # Debug
+                        
+                        if not feedback:
+                            print("Warning: Empty feedback generated")  # Debug
+                            feedback = "GOOD:\n• Point not generated\n\nMISS:\n• Feedback generation failed"
+                        
+                        self.interview_state["feedback"].append(feedback)
+                        
+                        # Move to next question
+                        self.interview_state["current_question"] += 1
+                        print(f"Advanced to question {self.interview_state['current_question']}")  # Debug
+                        
+                        # Format response
+                        if self.interview_state["current_question"] < len(self.interview_state["questions"]):
+                            next_q = self.interview_state["questions"][self.interview_state["current_question"]]
+                            response = f"FEEDBACK:\n{feedback}\n\nNEXT QUESTION:\n{next_q}"
+                            print(f"Prepared next question: {next_q}")  # Debug
+                        else:
+                            print("Generating final feedback...")  # Debug
+                            final_feedback = self._generate_final_feedback()
+                            response = f"Interview completed!\n\nFINAL FEEDBACK:\n{final_feedback}"
+                            self.interview_state["in_progress"] = False
                     
-                    # Move to next question or conclude
-                    self.interview_state["current_question"] += 1
-                    if self.interview_state["current_question"] < len(self.interview_state["questions"]):
-                        response = (
-                            f"{feedback}\n\n"
-                            f"Next question: {self.interview_state['questions'][self.interview_state['current_question']]}"
-                        )
-                    else:
-                        final_feedback = self._generate_final_feedback()
-                        response = f"Interview completed! Here's your comprehensive feedback:\n\n{final_feedback}"
-                        self.interview_state["in_progress"] = False
+                    except Exception as e:
+                        print(f"Error generating feedback: {str(e)}")  # Debug
+                        response = "Error generating feedback. Please try again."
+                        raise
                 
                 elif input_text.lower().strip() in ['no', 'n']:
-                    response = self.chain({
-                        "question": "No problem. Feel free to ask any specific questions, or let me know when you're ready to practice interviewing."
-                    })['answer']
+                    response = self.chain({"question": "No problem. Feel free to ask specific questions."})['answer']
                 else:
                     response = self.chain({"question": input_text})['answer']
             else:
                 response = self.chain.predict(human_input=input_text)
             
-            # Handle output (voice or text)
+            print(f"\nFinal response: {response[:100]}...")  # Debug
+            print("=== End Debug ===\n")  # Debug line
+            
             return self.handle_response(response, output_type)
             
         except Exception as e:
+            print(f"Error in chat method: {str(e)}")  # Debug
             raise Exception(f"Error processing message: {str(e)}")
 
     def transcribe(self, audio_path: str) -> str:

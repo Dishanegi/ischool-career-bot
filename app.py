@@ -449,7 +449,7 @@ def render_voice_chat_page():
             )
             
         with col2:
-            # Voice recorder
+            # Voice Recorder
             st.markdown('<div class="voice-recorder-container" style="margin-top: 10px;">', unsafe_allow_html=True)
             recorded_audio = audio_recorder(
                 text="",  # Remove text to show just the button
