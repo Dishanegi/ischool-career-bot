@@ -80,7 +80,7 @@ class VoiceAssistant:
     def _create_langchain_agent(self) -> Tuple[LLMChain, ConversationBufferMemory]:
         """Create and configure the LangChain conversation agent"""
         llm = ChatOpenAI(
-            temperature=0.4,
+            temperature=0.2,
             model_name='gpt-4o-mini',
             openai_api_key=self.api_key
         )
@@ -132,7 +132,7 @@ class VoiceAssistant:
     def _create_interview_agent(self, vectordb) -> Tuple[ConversationalRetrievalChain, ConversationBufferMemory]:
         """Create specialized interview chain with document context"""
         llm = ChatOpenAI(
-            temperature=0.4,
+            temperature=0.2,
             model_name='gpt-4o-mini',
             openai_api_key=self.api_key
         )
@@ -578,8 +578,8 @@ class VoiceAssistant:
         try:
             input_text = self.process_input(input_data, input_type)
             response = ""
-            print("\n=== Debug Info ===")  # Debug line
-            print(f"Input received: {input_text[:100]}...")  # Debug line
+            print("\n=== Debug Info ===")
+            print(f"Input received: {input_text[:100]}...")
             
             if isinstance(self.chain, ConversationalRetrievalChain):
                 if input_text.lower().strip() in ['yes', 'y'] and not self.interview_state["in_progress"]:
@@ -595,50 +595,52 @@ class VoiceAssistant:
                         "Take your time to answer each question thoroughly.\n\n"
                         "First question: " + self.interview_state["questions"][0]
                     )
-                    print(f"Starting interview with question: {self.interview_state['questions'][0]}")  # Debug
+                    print(f"Starting interview with question: {self.interview_state['questions'][0]}")
                 
                 elif self.interview_state["in_progress"]:
                     current_q = self.interview_state["questions"][self.interview_state["current_question"]]
-                    print(f"\nCurrent question ({self.interview_state['current_question']}): {current_q}")  # Debug
+                    print(f"\nCurrent question ({self.interview_state['current_question']}): {current_q}")
                     
                     # Store the answer
                     self.interview_state["answers"][current_q] = input_text
-                    print(f"Stored answer: {input_text[:100]}...")  # Debug
+                    print(f"Stored answer: {input_text[:100]}...")
                     
                     # Generate feedback
                     try:
                         if current_q == "Do you have any questions about the role or company?":
-                            print("Generating closing feedback...")  # Debug
+                            print("Generating closing feedback...")
                             feedback = self._generate_closing_question_feedback(input_text)
                         else:
-                            print("Generating standard feedback...")  # Debug
+                            print("Generating standard feedback...")
                             feedback = self._generate_answer_feedback(current_q, input_text)
                         
-                        print(f"\nGenerated feedback: {feedback}")  # Debug
+                        print(f"\nGenerated feedback: {feedback}")
                         
                         if not feedback:
-                            print("Warning: Empty feedback generated")  # Debug
+                            print("Warning: Empty feedback generated")
                             feedback = "GOOD:\n• Point not generated\n\nMISS:\n• Feedback generation failed"
                         
                         self.interview_state["feedback"].append(feedback)
                         
                         # Move to next question
                         self.interview_state["current_question"] += 1
-                        print(f"Advanced to question {self.interview_state['current_question']}")  # Debug
+                        print(f"Advanced to question {self.interview_state['current_question']}")
                         
                         # Format response
                         if self.interview_state["current_question"] < len(self.interview_state["questions"]):
                             next_q = self.interview_state["questions"][self.interview_state["current_question"]]
                             response = f"FEEDBACK:\n{feedback}\n\nNEXT QUESTION:\n{next_q}"
-                            print(f"Prepared next question: {next_q}")  # Debug
+                            print(f"Prepared next question: {next_q}")
                         else:
-                            print("Generating final feedback...")  # Debug
+                            print("Generating final feedback...")
+                            # Clean up any existing audio files before generating final feedback
+                            self.cleanup_audio_files()
                             final_feedback = self._generate_final_feedback()
                             response = f"Interview completed!\n\nFINAL FEEDBACK:\n{final_feedback}"
                             self.interview_state["in_progress"] = False
                     
                     except Exception as e:
-                        print(f"Error generating feedback: {str(e)}")  # Debug
+                        print(f"Error generating feedback: {str(e)}")
                         response = "Error generating feedback. Please try again."
                         raise
                 
@@ -649,13 +651,17 @@ class VoiceAssistant:
             else:
                 response = self.chain.predict(human_input=input_text)
             
-            print(f"\nFinal response: {response[:100]}...")  # Debug
-            print("=== End Debug ===\n")  # Debug line
+            print(f"\nFinal response: {response[:100]}...")
+            print("=== End Debug ===\n")
             
+            # Clean up previous audio files before generating new response
+            if output_type == "voice":
+                self.cleanup_audio_files()
+                
             return self.handle_response(response, output_type)
             
         except Exception as e:
-            print(f"Error in chat method: {str(e)}")  # Debug
+            print(f"Error in chat method: {str(e)}")
             raise Exception(f"Error processing message: {str(e)}")
 
     def transcribe(self, audio_path: str) -> str:
@@ -693,23 +699,30 @@ class VoiceAssistant:
                 raise Exception(f"Error encoding audio to base64: {str(e)}")
         return None
 
-    def cleanup(self):
-        """Clean up temporary files"""
-        if self.persist_directory and os.path.exists(self.persist_directory):
-            shutil.rmtree(self.persist_directory)
-            
+    def cleanup_audio_files(self):
+        """Clean up audio files from the audio_files directory"""
         try:
-            # Clean up audio files from the audio_files directory
             if os.path.exists(self.audio_directory):
                 for file in os.listdir(self.audio_directory):
                     if (file.startswith("audio_input_") or 
                         file.startswith("audio_response_")) and file.endswith(".mp3"):
+                        file_path = os.path.join(self.audio_directory, file)
                         try:
-                            os.remove(os.path.join(self.audio_directory, file))
+                            os.remove(file_path)
+                            print(f"Removed audio file: {file}")
                         except Exception as e:
                             print(f"Could not remove audio file {file}: {str(e)}")
         except Exception as e:
             print(f"Error during audio cleanup: {str(e)}")
+
+    def cleanup(self):
+        """Clean up temporary files and audio files"""
+        # Clean up vector store directory
+        if self.persist_directory and os.path.exists(self.persist_directory):
+            shutil.rmtree(self.persist_directory)
+        
+        # Clean up audio files
+        self.cleanup_audio_files()
 
     def get_conversation_history(self) -> str:
         """Get the current conversation history"""

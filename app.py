@@ -347,7 +347,7 @@ def render_voice_chat_page():
         st.session_state.resume_analyzed = False
     if 'interview_started' not in st.session_state:
         st.session_state.interview_started = False
-    if 'input_mode' not in st.session_state:  # New state for tracking input mode
+    if 'input_mode' not in st.session_state:  
         st.session_state.input_mode = "text"
 
     timestamp = int(time.time() * 1000)
