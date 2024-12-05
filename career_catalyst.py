@@ -102,46 +102,6 @@ def create_visualization(df, column_name, viz_type, title=None):
         st.error(f"Error creating visualization: {str(e)}")
         return False
 
-# Cache categorical data analysis
-@st.cache_data(show_spinner="Analyzing categorical data...")
-def analyze_categorical_data(_pandas_agent, column_name, df):
-    st.write(f"Analysis of {column_name}")
-    
-    if column_name not in df.columns:
-        st.error(f"Column '{column_name}' not found in the dataset")
-        return
-    
-    try:
-        if isinstance(df[column_name], pd.DataFrame):
-            value_counts = df[column_name].iloc[:, 0].value_counts()
-        else:
-            value_counts = df[column_name].value_counts()
-            
-        st.write("Category Distribution:")
-        st.write(value_counts)
-        
-        st.write("Distribution Visualization:")
-        chart_data = pd.DataFrame({
-            'Category': value_counts.index,
-            'Count': value_counts.values
-        })
-        st.bar_chart(chart_data.set_index('Category'))
-        
-        distribution = _pandas_agent.run(f"""Analyze the distribution of {column_name} and provide insights. 
-        Include:
-        1. Most common categories
-        2. Least common categories
-        3. Any interesting patterns
-        4. Potential business implications
-        """)
-        st.write("Key Insights:")
-        st.write(distribution)
-        
-    except Exception as e:
-        st.error(f"Error creating visualization: {str(e)}")
-        st.write("Raw data for debugging:")
-        st.write(df[column_name].head())
-
 def store_visualization(column, viz_type, title, stats=None):
     """Store visualization metadata in session state"""
     viz_data = {
@@ -152,7 +112,6 @@ def store_visualization(column, viz_type, title, stats=None):
         'timestamp': pd.Timestamp.now()
     }
     st.session_state.visualization_history.append(viz_data)
-
 
 @st.cache_data(show_spinner="Processing question...", ttl="10m")
 def process_question(_pandas_agent, question, df):

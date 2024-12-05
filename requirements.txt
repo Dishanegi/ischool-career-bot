@@ -12,3 +12,4 @@ pysqlite3-binary>=0.5.1
 audio_recorder_streamlit
 google-search-results
 plotly
+langchain_experimental
