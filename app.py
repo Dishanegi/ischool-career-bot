@@ -8,7 +8,7 @@ import pathlib
 import pandas as pd
 from audio_recorder_streamlit import audio_recorder
 from voice_chat_assistant import VoiceAssistant
-from career_catalyst import get_llm,get_pandas_agent,process_question,initial_analysis
+from career_catalyst import get_llm,get_pandas_agent,process_question,initial_analysis,create_visualization,create_multi_column_viz
 from collections import deque
 
 class PageType(Enum):
@@ -530,82 +530,112 @@ def render_career_catalyst_page():
         st.session_state.chat_history = []
     if 'analysis_complete' not in st.session_state:
         st.session_state.analysis_complete = False
-    if 'df' not in st.session_state:
-        st.session_state.df = None
-    if 'llm' not in st.session_state:
-        st.session_state.llm = None
-    if 'pandas_agent' not in st.session_state:
-        st.session_state.pandas_agent = None
+    if 'visualization_history' not in st.session_state:
+        st.session_state.visualization_history = []
+    # Optional: Add a max history size
+    if 'max_history' not in st.session_state:
+        st.session_state.max_history = 5
 
     # File Upload Section
     st.markdown("### 📤 Upload Employment Data")
 
+    def add_to_chat_history(message):
+        st.session_state.chat_history.append(message)
+        # Keep only the last N messages
+        if len(st.session_state.chat_history) > st.session_state.max_history * 2:  # *2 to account for both user and assistant messages
+            st.session_state.chat_history = st.session_state.chat_history[-st.session_state.max_history * 2:]
+
+    def store_visualization(column, viz_type, title, stats=None):
+        """Store visualization metadata in session state"""
+        viz_data = {
+            'column': column,
+            'type': viz_type,
+            'title': title,
+            'stats': stats,
+            'timestamp': pd.Timestamp.now()
+        }
+        st.session_state.visualization_history.append(viz_data)
+
+    def display_chat_message(role, content, with_visualization=None):
+        """Display a chat message with optional visualization"""
+        with st.chat_message(role):
+            st.write(content)
+            if with_visualization:
+                # Check if it's a single column or multi-column visualization
+                if 'columns' in with_visualization:
+                    # Multi-column visualization
+                    create_multi_column_viz(
+                        df, 
+                        with_visualization['columns'],
+                        with_visualization['type']
+                    )
+                elif 'column' in with_visualization:
+                    # Single column visualization
+                    create_visualization(
+                        df, 
+                        with_visualization['column'],
+                        with_visualization['type'],
+                        with_visualization['title']
+                    )
+                
+                if with_visualization.get('stats'):
+                    st.write("Distribution Insights:")
+                    st.write(with_visualization['stats'])
     def clicked(button):
-        """Update session state when button is clicked"""
         st.session_state.clicked[button] = True
 
-    # Main app flow
     st.button("Let's get started", on_click=clicked, args=[1])
-
     if st.session_state.clicked[1]:
         user_csv = st.file_uploader("Upload your file here", type="csv")
         if user_csv is not None:
-            try:
-                user_csv.seek(0)
-                df = pd.read_csv(user_csv, engine='python')
+            user_csv.seek(0)
+            df = pd.read_csv(user_csv, low_memory=False)
+
+            # Create LLM and pandas agent using cached functions
+            llm = get_llm()
+            pandas_agent = get_pandas_agent(llm, df)
+
+            # Perform initial analysis
+            initial_analysis(pandas_agent, df)
+
+            # Chat interface
+            st.write("---")
+            st.subheader("Ask me anything about your data 💭")
+            
+            # Display full chat history with visualizations
+            for message in st.session_state.chat_history:
+                display_chat_message(
+                    message["role"],
+                    message["content"],
+                    message.get("visualization")
+                )
+
+            # User input
+            user_question = st.chat_input("Type your question here...")
+            if user_question:
+                # Add user message to chat history using the new function
+                add_to_chat_history({
+                    "role": "user",
+                    "content": user_question
+                })
+                # Display user message
+                display_chat_message("user", user_question)
                 
-                if df is not None:
-                    # Store DataFrame in session state
-                    st.session_state.df = df
+                
+                # Process the question and get response
+                with st.chat_message("assistant"):
+                    response, viz_data = process_question(pandas_agent, user_question, df)
+                    st.write(response)
                     
-                    # Initialize LLM and agent if not already done
-                    if st.session_state.llm is None:
-                        st.session_state.llm = get_llm()
-                    if st.session_state.pandas_agent is None:
-                        st.session_state.pandas_agent = get_pandas_agent(st.session_state.llm, df)
-
-                    # Perform initial analysis only if not done yet
-                    if not st.session_state.analysis_complete:
-                        initial_analysis(st.session_state.pandas_agent, df)
-
-                    st.write("---")
-                    st.subheader("Ask me anything about your data 💭")
+                    # Add assistant's response to chat history
+                    message_data = {
+                        "role": "assistant",
+                        "content": response,
+                    }
+                    if viz_data:
+                        message_data["visualization"] = viz_data
                     
-                    # Display chat history
-                    for message in st.session_state.chat_history:
-                        with st.chat_message(message["role"]):
-                            st.markdown(message["content"])
-
-                    # Get user input
-                    user_question = st.chat_input("Type your question here...")
-                    if user_question:
-                        # Add user message to history
-                        st.session_state.chat_history.append({
-                            "role": "user",
-                            "content": user_question
-                        })
-
-                        # Process the question and get response
-                        with st.chat_message("assistant"):
-                            # Pass the current DataFrame from session state
-                            response = process_question(
-                                st.session_state.pandas_agent,
-                                user_question,
-                                st.session_state.df  # Use DataFrame from session state
-                            )
-                            
-                            # Add assistant's response to history
-                            st.session_state.chat_history.append({
-                                "role": "assistant",
-                                "content": response
-                            })
-
-                        # Rerun to update the chat display
-                        st.rerun()
-                            
-            except Exception as e:
-                st.error(f"Error reading CSV file: {str(e)}")
-                st.stop()
+                    add_to_chat_history(message_data)
 
 
 def main():

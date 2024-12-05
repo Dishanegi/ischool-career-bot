@@ -1,58 +1,111 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 from langchain_openai import OpenAI
 from langchain_experimental.agents import create_pandas_dataframe_agent
-from langchain.prompts import PromptTemplate
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+from dotenv import load_dotenv, find_dotenv
 
-openai_api_key = st.secrets["openai_api_key"]
+# OpenAIKey
+os.environ['OPENAI_API_KEY']=st.secrets["openai_api_key"]
+load_dotenv(find_dotenv())
+
 
 @st.cache_resource
 def get_llm():
-    """Initialize and return the LLM instance"""
-    return OpenAI(temperature=0, openai_api_key=openai_api_key)
+    """Initialize and return the OpenAI LLM instance"""
+    return OpenAI(temperature=0)
 
+# Cache the pandas agent creation
 @st.cache_resource
 def get_pandas_agent(_llm, df):
     """Create and return the pandas dataframe agent"""
-    return create_pandas_dataframe_agent(
-        _llm,
-        df,
-        verbose=True,
-        allow_dangerous_code=True,
-        max_iterations=1000,
-        max_execution_time=300,
-        handle_parsing_errors=True
-    )
+    return create_pandas_dataframe_agent(_llm, df, verbose=True, allow_dangerous_code=True)
 
 def create_visualization(df, column_name, viz_type, title=None):
-    """Create different types of visualizations based on the specified type"""
+    """Create different types of visualizations using Matplotlib based on the specified type"""
     try:
+        # Create figure and axis objects
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
         if viz_type == "bar":
-            fig = px.bar(df, x=column_name, title=title)
+            if df[column_name].dtype in ['object', 'category']:
+                value_counts = df[column_name].value_counts()
+                value_counts.plot(kind='bar', ax=ax)
+            else:
+                df[column_name].plot(kind='bar', ax=ax)
+                
         elif viz_type == "line":
-            fig = px.line(df, y=column_name, title=title)
+            # Handle both series and dataframe inputs
+            if isinstance(df, pd.DataFrame):
+                if pd.api.types.is_numeric_dtype(df[column_name]):
+                    # Create line plot with index as x-axis
+                    ax.plot(df.index, df[column_name])
+                    ax.set_ylabel(column_name)
+                else:
+                    raise ValueError(f"Column {column_name} must be numeric for line plots")
+            else:
+                ax.plot(df.index, df)
+            
         elif viz_type == "scatter":
-            fig = px.scatter(df, x=df.index, y=column_name, title=title)
+            ax.scatter(df.index, df[column_name])
+            
         elif viz_type == "histogram":
-            fig = px.histogram(df, x=column_name, title=title)
+            # Ensure the data is numeric and handle NaN values
+            if pd.api.types.is_numeric_dtype(df[column_name]):
+                data = df[column_name].dropna()
+                
+                # Calculate optimal number of bins using Sturges' rule
+                n_bins = int(np.log2(len(data)) + 1)
+                
+                # Create histogram with density=False to show counts
+                ax.hist(data, bins=n_bins, edgecolor='black', alpha=0.7)
+                
+                # Add mean and median lines
+                mean_val = data.mean()
+                median_val = data.median()
+                ax.axvline(mean_val, color='red', linestyle='--', label=f'Mean: {mean_val:.2f}')
+                ax.axvline(median_val, color='green', linestyle='--', label=f'Median: {median_val:.2f}')
+                
+                ax.set_ylabel('Frequency')
+                ax.legend()
+            else:
+                raise ValueError(f"Column {column_name} must be numeric for histograms")
+            
         elif viz_type == "box":
-            fig = px.box(df, y=column_name, title=title)
+            df[column_name].plot(kind='box', ax=ax)
+            
         elif viz_type == "pie":
             value_counts = df[column_name].value_counts()
-            fig = px.pie(values=value_counts.values, names=value_counts.index, title=title)
+            ax.pie(value_counts.values, labels=value_counts.index, autopct='%1.1f%%')
+            ax.axis('equal')
+            
         else:
             raise ValueError(f"Unsupported visualization type: {viz_type}")
         
-        st.plotly_chart(fig)
+        # Set title if provided
+        if title:
+            ax.set_title(title)
+        
+        # Customize the appearance
+        ax.set_xlabel(column_name)
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        
+        # Display in Streamlit
+        st.pyplot(fig)
+        plt.close()
         return True
+        
     except Exception as e:
         st.error(f"Error creating visualization: {str(e)}")
         return False
 
+# Cache categorical data analysis
 @st.cache_data(show_spinner="Analyzing categorical data...")
 def analyze_categorical_data(_pandas_agent, column_name, df):
-    st.write(f"**Analysis of {column_name}**")
+    st.write(f"Analysis of {column_name}")
     
     if column_name not in df.columns:
         st.error(f"Column '{column_name}' not found in the dataset")
@@ -81,7 +134,7 @@ def analyze_categorical_data(_pandas_agent, column_name, df):
         3. Any interesting patterns
         4. Potential business implications
         """)
-        st.write("**Key Insights:**")
+        st.write("Key Insights:")
         st.write(distribution)
         
     except Exception as e:
@@ -89,64 +142,201 @@ def analyze_categorical_data(_pandas_agent, column_name, df):
         st.write("Raw data for debugging:")
         st.write(df[column_name].head())
 
-@st.cache_resource
-def get_templates():
-    """Create and return the prompt templates"""
-    simple_template = PromptTemplate(
-        input_variables=['question'],
-        template='Calculate and return {question} in a clear, direct way using the given dataset.'
-    )
-    
-    moderate_template = PromptTemplate(
-        input_variables=['question'],
-        template='''Analyze {question} by:
-        1. Calculating relevant metrics
-        2. Identifying any obvious patterns
-        3. Consider if visualization would be helpful'''
-    )
-    
-    complex_template = PromptTemplate(
-        input_variables=['question'],
-        template='''Perform a thorough analysis of {question}:
-        1. Calculate key metrics and statistics
-        2. Identify significant patterns and trends
-        3. Consider relationships between different variables
-        4. Suggest appropriate visualizations
-        5. Provide actionable insights'''
-    )
-    
-    return {
-        'SIMPLE': simple_template,
-        'MODERATE': moderate_template,
-        'COMPLEX': complex_template
+def store_visualization(column, viz_type, title, stats=None):
+    """Store visualization metadata in session state"""
+    viz_data = {
+        'column': column,
+        'type': viz_type,
+        'title': title,
+        'stats': stats,
+        'timestamp': pd.Timestamp.now()
     }
+    st.session_state.visualization_history.append(viz_data)
 
-@st.cache_data
-def classify_question(_llm, question):
-    """Classify the complexity of the question"""
-    classification_prompt = f"""
-    Analyze this data analysis question: "{question}"
-    Classify it as:
-    'SIMPLE' if it only needs basic statistics or a single metric
-    'MODERATE' if it needs some analysis and maybe visualization
-    'COMPLEX' if it needs in-depth analysis with multiple aspects
-    Return only one word: SIMPLE, MODERATE, or COMPLEX
-    """
-    response = _llm(classification_prompt)
-    return response.strip()
 
+@st.cache_data(show_spinner="Processing question...", ttl="10m")
+def process_question(_pandas_agent, question, df):
+    try:
+        # Increase context window to last 5 conversations
+        context = [f"{msg['role']}: {msg['content']}" for msg in st.session_state.chat_history[-5:]]
+        context_str = "\n".join(context)
+
+        insights_keywords = ["insights", "analyze", "explain", "describe", "tell me about", "what do you see", "what can you tell"]
+        is_analysis_request = any(keyword in question.lower() for keyword in insights_keywords)
+       
+        if is_analysis_request and st.session_state.visualization_history:
+            last_viz = st.session_state.visualization_history[-1]
+            # Check if it's a single or multi-column visualization
+            columns_str = last_viz.get('column') if 'column' in last_viz else ', '.join(last_viz.get('columns', []))
+            
+            analysis_prompt = f"""
+            Analyze this visualization of {columns_str} using actual data:
+            1. For single column:
+                - Distribution/frequency patterns
+                - Key statistics (mean, median, mode)
+                - Notable outliers
+            2. For multiple columns:
+                - Relationships/correlations
+                - Trends across categories
+                - Key differences between groups
+            3. Business implications of the patterns
+            Format: "Analysis: [your insights]"
+            """
+            response = _pandas_agent.run(analysis_prompt)
+            if "Analysis:" in response:
+                response = response.split("Analysis:")[1].strip()
+            return response, None
+
+        explanation_keywords = ["explain", "describe", "tell me about", "what does", "analyze", "interpret"]
+        is_viz_explanation = any(keyword in question.lower() for keyword in explanation_keywords) and "graph" in question.lower()
+       
+        if is_viz_explanation and st.session_state.visualization_history:
+           last_viz = st.session_state.visualization_history[-1]
+           # Check if it's a single or multi-column visualization
+           columns_str = last_viz.get('column') if 'column' in last_viz else ', '.join(last_viz.get('columns', []))
+           analysis_prompt = f"""
+           Analyze the {last_viz['type']} chart of {columns_str} that was just displayed.
+           Provide insights about:
+           1. The overall distribution/pattern
+           2. Any notable trends or outliers
+           3. Key statistics if relevant
+           Keep the explanation clear and data-focused.
+           """
+           response = _pandas_agent.run(analysis_prompt)
+           return response, None
+        
+        visualization_keywords = ["show", "plot", "display", "visualize", "graph", "chart", "distribution", "histogram", "box", "vs", "versus", "compare", "correlation", "visualization"]
+        needs_viz = any(keyword in question.lower() for keyword in visualization_keywords)
+        
+        viz_data = None
+        if needs_viz:
+            viz_query = _pandas_agent.run(f"""
+            For the question: "{question}"
+            1. Identify which columns need to be visualized
+            2. Choose the best visualization type (scatter/bar/line/box/pie)
+            3. Return ONLY in this format:
+            COLUMNS: column1, column2 (if comparing two columns)
+            TYPE: <viz_type>
+            
+            Base your choice on:
+            - If comparing categories vs numbers: use bar
+            - If comparing two numbers: use scatter
+            - If looking at trends: use line
+            - If analyzing distributions with categories: use box
+            - If showing value distributions: use histogram
+            - If showing proportions of a whole: use pie  # Add this line
+            
+            Consider the columns' data types and question context carefully.
+            """)
+            
+            try:
+                lines = viz_query.strip().split('\n')
+                columns = []
+                viz_type = None
+                
+                for line in lines:
+                    if line.startswith('COLUMNS:'):
+                        columns = [c.strip() for c in line.replace('COLUMNS:', '').split(',')]
+                    elif line.startswith('TYPE:'):
+                        viz_type = line.replace('TYPE:', '').strip().lower()
+                
+                if columns and viz_type and all(col in df.columns for col in columns):
+                    if len(columns) == 1:
+                        viz_data = {
+                            'column': columns[0],
+                            'type': viz_type,
+                            'title': f"{viz_type.capitalize()} of {columns[0]}"
+                        }
+                        # Use create_visualization for single column visualizations
+                        create_visualization(df, columns[0], viz_type, viz_data['title'])
+                    else:
+                        viz_data = {
+                            'columns': columns,
+                            'type': viz_type,
+                            'title': f"{viz_type.capitalize()} of {columns[0]} vs {columns[1]}"
+                        }
+                        # Use create_multi_column_viz for multiple columns
+                        create_multi_column_viz(df, columns, viz_type)
+    
+                    if 'visualization_history' in st.session_state:
+                        st.session_state.visualization_history.append(viz_data)
+                        # Keep only last 5 visualizations
+                        if len(st.session_state.visualization_history) > 5:
+                            st.session_state.visualization_history = st.session_state.visualization_history[-5:]
+                        
+            except Exception as viz_error:
+                st.error(f"Visualization error: {str(viz_error)}")
+
+        if "histogram" in question.lower() or "distribution" in question.lower():
+            column_query = _pandas_agent.run(f"""
+            For the question: "{question}"
+            1. Identify which numeric column needs a histogram
+            2. Return ONLY the column name in this format:
+            COLUMN: <column_name>
+            """)
+            
+            try:
+                column = column_query.split('COLUMN:')[1].strip()
+                if column in df.columns and pd.api.types.is_numeric_dtype(df[column]):
+                    stats = _pandas_agent.run(f"""
+                    Analyze the distribution of {column} and provide:
+                    1. The range of values
+                    2. The mean and median
+                    3. Any notable patterns or skewness
+                    Keep it concise.
+                    """)
+                    
+                    viz_data = {
+                        'column': column,
+                        'type': 'histogram',
+                        'title': f"Distribution of {column}",
+                        'stats': stats
+                    }
+                    create_visualization(df, column, 'histogram', f"Distribution of {column}")
+                    
+                    if 'visualization_history' in st.session_state:
+                        st.session_state.visualization_history.append(viz_data)
+                    
+            except Exception as e:
+                st.error(f"Could not create histogram. Error: {str(e)}")
+
+        # Generate final response
+        analysis_prompt = f"""
+        Previous conversation context (last 5 exchanges):
+        {context_str}
+        
+        Current question: {question}
+        
+        When analyzing:
+        1. Consider relationships between relevant columns
+        2. If finding specific values, include their related data
+        3. Process complete rows of data when needed
+        4. Include supporting evidence in the response
+        
+        Execute the analysis and return complete results.
+        """
+        
+        response = _pandas_agent.run(analysis_prompt if not needs_viz else question)
+        return response, viz_data
+        
+    except Exception as e:
+        st.error(f"An error occurred: {str(e)}")
+        return f"I encountered an error while processing your question: {str(e)}", None
+
+# Cache initial analysis
+@st.cache_data(show_spinner="Performing initial analysis...")
 def initial_analysis(_pandas_agent, df):
     """Perform initial EDA and store results in session state"""
     if not st.session_state.analysis_complete:
-        st.write("**Data Overview**")
+        st.write("Data Overview")
         st.write("The first rows of your dataset look like this:")
         st.write(df.head())
         
         categorical_columns = df.select_dtypes(include=['object', 'category']).columns
-        st.write("\n**Categorical Columns Available:**")
+        st.write("\n*Categorical Columns Available:*")
         st.write(list(categorical_columns))
         
-        st.write("**Data Quality Assessment**")
+        st.write("Data Quality Assessment")
         columns_df = _pandas_agent.run("""For each column, provide:
         1. The data type
         2. Whether it's categorical or numerical
@@ -166,141 +356,29 @@ def initial_analysis(_pandas_agent, df):
             "content": "I've completed the initial analysis. What would you like to know about your data? You can ask me anything about the patterns, relationships, or specific aspects of your dataset."
         })
 
-@st.cache_data(show_spinner="Processing question...", ttl="10m")
-def process_question(_pandas_agent, question, df):
-    """Process any data-related question and determine appropriate visualization"""
+def create_multi_column_viz(df, columns, viz_type):
     try:
-        # First, let the agent analyze the question and form a plan
-        analysis_prompt = f"""
-        For this question: "{question}"
+        fig, ax = plt.subplots(figsize=(10, 6))
         
-        1. What columns are relevant to this question?
-        2. What type of analysis is needed?
-        3. Would visualization help understand the answer?
+        if viz_type == "scatter":
+            ax.scatter(df[columns[0]], df[columns[1]], alpha=0.5)
+        elif viz_type == "bar":
+            # For categorical vs numerical comparisons
+            grouped_data = df.groupby(columns[0])[columns[1]].mean().sort_values(ascending=False)
+            grouped_data.plot(kind='bar', ax=ax)
+        elif viz_type == "line":
+            df.sort_values(columns[0]).plot(x=columns[0], y=columns[1], kind='line', ax=ax)
+        elif viz_type == "box":
+            df.boxplot(column=columns[1], by=columns[0], ax=ax)
+            
+        ax.set_xlabel(columns[0])
+        ax.set_ylabel(columns[1])
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
         
-        Return response as JSON:
-        {{
-            "relevant_columns": ["col1", "col2"],
-            "analysis_type": "descriptive|comparative|relationship|trend",
-            "viz_needed": true|false,
-            "viz_suggestions": [
-                {{
-                    "type": "bar|box|scatter|line|pie",
-                    "columns": ["col1", "col2"],
-                    "purpose": "brief explanation"
-                }}
-            ]
-        }}
-        """
-        
-        try:
-            # Get analysis plan
-            plan = _pandas_agent.run(analysis_prompt)
-            
-            # Execute detailed query with context preservation
-            execution_prompt = f"""
-            For this question: "{question}"
-            When analyzing:
-            1. Consider relationships between relevant columns
-            2. If finding specific values, include their related data
-            3. Process complete rows of data when needed
-            4. Include supporting evidence in the response
-            
-            Execute the analysis and return complete results.
-            """
-            
-            response = _pandas_agent.run(execution_prompt)
-            response_text = f"**Analysis:**\n{response}"
-                
-            # Create visualizations if needed
-            try:
-                if "viz_needed" in plan.lower() and "true" in plan.lower():
-                    viz_text = []
-                    for viz in eval(plan).get("viz_suggestions", []):
-                        try:
-                            fig = None
-                            if viz["type"] == "bar":
-                                cols = viz["columns"]
-                                if len(cols) == 2:
-                                    agg_data = df.groupby(cols[0])[cols[1]].mean().reset_index()
-                                    fig = px.bar(
-                                        agg_data,
-                                        x=cols[0],
-                                        y=cols[1],
-                                        title=f'Average {cols[1]} by {cols[0]}'
-                                    )
-                                elif len(cols) == 1:
-                                    value_counts = df[cols[0]].value_counts().reset_index()
-                                    fig = px.bar(
-                                        value_counts,
-                                        x="index",
-                                        y=cols[0],
-                                        title=f'Distribution of {cols[0]}'
-                                    )
-                                    
-                            elif viz["type"] == "box":
-                                cols = viz["columns"]
-                                fig = px.box(
-                                    df,
-                                    x=cols[0],
-                                    y=cols[1] if len(cols) > 1 else None,
-                                    title=f'Distribution of {cols[-1]}'
-                                )
-                                
-                            elif viz["type"] == "scatter":
-                                cols = viz["columns"]
-                                fig = px.scatter(
-                                    df,
-                                    x=cols[0],
-                                    y=cols[1],
-                                    color=cols[2] if len(cols) > 2 else None,
-                                    title=f'Relationship between {cols[0]} and {cols[1]}'
-                                )
-                            
-                            if fig:
-                                st.plotly_chart(fig)
-                                viz_text.append(f"**{viz.get('purpose', 'Visualization')}**")
-                                
-                        except Exception as viz_error:
-                            continue
-            
-                # Get additional insights
-                insights_prompt = f"""
-                Based on the analysis results, provide:
-                1. Key patterns or insights
-                2. Relevant context for the findings
-                3. Any notable relationships in the data
-                Keep insights focused on the original question.
-                """
-                
-                insights = _pandas_agent.run(insights_prompt)
-                response_text += f"\n\n**Additional Insights:**\n{insights}"
-                
-            except Exception as e:
-                pass
-            
-            return response_text
-            
-        except Exception as e:
-            # Direct question handling if JSON parsing fails
-            response = _pandas_agent.run(f"""
-            Analyze: {question}
-            Important:
-            1. Include all relevant column relationships
-            2. Show supporting data
-            3. Verify results before responding
-            """)
-            return f"**Analysis:**\n{response}"
-            
+        st.pyplot(fig)
+        plt.close()
+        return True
     except Exception as e:
-        error_msg = f"An error occurred while processing your question: {str(e)}"
-        try:
-            # Simple fallback analysis
-            response = _pandas_agent.run(f"Analyze {question} in the simplest way possible.")
-            return f"**Basic Analysis:**\n{response}"
-        except Exception as fallback_error:
-            return "Could not complete the analysis. Please try rephrasing your question."
-
-def clicked(button):
-    """Update session state when button is clicked"""
-    st.session_state.clicked[button] = True
+        st.error(f"Error in multi-column visualization: {str(e)}")
+        return False

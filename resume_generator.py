@@ -22,7 +22,6 @@ from langchain_community.vectorstores import Chroma
 def get_resume(job_description: str, resume_file, openai_api_key: str):
     """
     Create a conversational resume analyzer that compares a PDF resume against a job description.
-    Using existing load_pdf function.
     """
     persist_directory = tempfile.mkdtemp()
     
