@@ -14,3 +14,4 @@ google-search-results
 plotly
 langchain_experimental
 matplotlib
+tabulate
