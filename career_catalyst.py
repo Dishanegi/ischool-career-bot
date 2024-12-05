@@ -116,18 +116,32 @@ def store_visualization(column, viz_type, title, stats=None):
 @st.cache_data(show_spinner="Processing question...", ttl="10m")
 def process_question(_pandas_agent, question, df):
     try:
-        # Increase context window to last 5 conversations
+        # Keep existing context window logic
         context = [f"{msg['role']}: {msg['content']}" for msg in st.session_state.chat_history[-5:]]
         context_str = "\n".join(context)
 
+        # Keep all existing visualization keywords and logic
         insights_keywords = ["insights", "analyze", "explain", "describe", "tell me about", "what do you see", "what can you tell"]
+        explanation_keywords = ["explain", "describe", "tell me about", "what does", "analyze", "interpret"]
+        visualization_keywords = ["show", "plot", "display", "visualize", "graph", "chart", "distribution", "histogram", "box", "vs", "versus", "compare", "correlation", "visualization"]
+        
+        # Add new analysis keywords
+        analysis_keywords = ["what", "which", "how many", "list", "tell me", "find", "calculate", "compute", "analyze", 
+                           "highest", "lowest", "top", "bottom", "average", "mean", "median", "most", "least"]
+        
+        needs_viz = any(keyword in question.lower() for keyword in visualization_keywords)
+        needs_analysis = any(keyword in question.lower() for keyword in analysis_keywords)
         is_analysis_request = any(keyword in question.lower() for keyword in insights_keywords)
-       
+        is_viz_explanation = any(keyword in question.lower() for keyword in explanation_keywords) and "graph" in question.lower()
+
+        response = None
+        viz_data = None
+
+        # Handle existing visualization logic first
         if is_analysis_request and st.session_state.visualization_history:
+            # Keep existing visualization analysis logic
             last_viz = st.session_state.visualization_history[-1]
-            # Check if it's a single or multi-column visualization
             columns_str = last_viz.get('column') if 'column' in last_viz else ', '.join(last_viz.get('columns', []))
-            
             analysis_prompt = f"""
             Analyze this visualization of {columns_str} using actual data:
             1. For single column:
@@ -146,29 +160,24 @@ def process_question(_pandas_agent, question, df):
                 response = response.split("Analysis:")[1].strip()
             return response, None
 
-        explanation_keywords = ["explain", "describe", "tell me about", "what does", "analyze", "interpret"]
-        is_viz_explanation = any(keyword in question.lower() for keyword in explanation_keywords) and "graph" in question.lower()
-       
         if is_viz_explanation and st.session_state.visualization_history:
-           last_viz = st.session_state.visualization_history[-1]
-           # Check if it's a single or multi-column visualization
-           columns_str = last_viz.get('column') if 'column' in last_viz else ', '.join(last_viz.get('columns', []))
-           analysis_prompt = f"""
-           Analyze the {last_viz['type']} chart of {columns_str} that was just displayed.
-           Provide insights about:
-           1. The overall distribution/pattern
-           2. Any notable trends or outliers
-           3. Key statistics if relevant
-           Keep the explanation clear and data-focused.
-           """
-           response = _pandas_agent.run(analysis_prompt)
-           return response, None
-        
-        visualization_keywords = ["show", "plot", "display", "visualize", "graph", "chart", "distribution", "histogram", "box", "vs", "versus", "compare", "correlation", "visualization"]
-        needs_viz = any(keyword in question.lower() for keyword in visualization_keywords)
-        
-        viz_data = None
+            # Keep existing visualization explanation logic
+            last_viz = st.session_state.visualization_history[-1]
+            columns_str = last_viz.get('column') if 'column' in last_viz else ', '.join(last_viz.get('columns', []))
+            analysis_prompt = f"""
+            Analyze the {last_viz['type']} chart of {columns_str} that was just displayed.
+            Provide insights about:
+            1. The overall distribution/pattern
+            2. Any notable trends or outliers
+            3. Key statistics if relevant
+            Keep the explanation clear and data-focused.
+            """
+            response = _pandas_agent.run(analysis_prompt)
+            return response, None
+
+        # Handle visualization if needed
         if needs_viz:
+            # Keep all existing visualization logic
             viz_query = _pandas_agent.run(f"""
             For the question: "{question}"
             1. Identify which columns need to be visualized
@@ -176,16 +185,6 @@ def process_question(_pandas_agent, question, df):
             3. Return ONLY in this format:
             COLUMNS: column1, column2 (if comparing two columns)
             TYPE: <viz_type>
-            
-            Base your choice on:
-            - If comparing categories vs numbers: use bar
-            - If comparing two numbers: use scatter
-            - If looking at trends: use line
-            - If analyzing distributions with categories: use box
-            - If showing value distributions: use histogram
-            - If showing proportions of a whole: use pie  # Add this line
-            
-            Consider the columns' data types and question context carefully.
             """)
             
             try:
@@ -206,7 +205,6 @@ def process_question(_pandas_agent, question, df):
                             'type': viz_type,
                             'title': f"{viz_type.capitalize()} of {columns[0]}"
                         }
-                        # Use create_visualization for single column visualizations
                         create_visualization(df, columns[0], viz_type, viz_data['title'])
                     else:
                         viz_data = {
@@ -214,68 +212,46 @@ def process_question(_pandas_agent, question, df):
                             'type': viz_type,
                             'title': f"{viz_type.capitalize()} of {columns[0]} vs {columns[1]}"
                         }
-                        # Use create_multi_column_viz for multiple columns
                         create_multi_column_viz(df, columns, viz_type)
-    
+                    
                     if 'visualization_history' in st.session_state:
                         st.session_state.visualization_history.append(viz_data)
-                        # Keep only last 5 visualizations
-                        if len(st.session_state.visualization_history) > 5:
-                            st.session_state.visualization_history = st.session_state.visualization_history[-5:]
-                        
             except Exception as viz_error:
                 st.error(f"Visualization error: {str(viz_error)}")
 
-        if "histogram" in question.lower() or "distribution" in question.lower():
-            column_query = _pandas_agent.run(f"""
-            For the question: "{question}"
-            1. Identify which numeric column needs a histogram
-            2. Return ONLY the column name in this format:
-            COLUMN: <column_name>
-            """)
+        # Add new analysis handling
+        if needs_analysis:
+            analysis_prompt = f"""
+            Question: {question}
             
-            try:
-                column = column_query.split('COLUMN:')[1].strip()
-                if column in df.columns and pd.api.types.is_numeric_dtype(df[column]):
-                    stats = _pandas_agent.run(f"""
-                    Analyze the distribution of {column} and provide:
-                    1. The range of values
-                    2. The mean and median
-                    3. Any notable patterns or skewness
-                    Keep it concise.
-                    """)
-                    
-                    viz_data = {
-                        'column': column,
-                        'type': 'histogram',
-                        'title': f"Distribution of {column}",
-                        'stats': stats
-                    }
-                    create_visualization(df, column, 'histogram', f"Distribution of {column}")
-                    
-                    if 'visualization_history' in st.session_state:
-                        st.session_state.visualization_history.append(viz_data)
-                    
-            except Exception as e:
-                st.error(f"Could not create histogram. Error: {str(e)}")
+            Previous context:
+            {context_str}
+            
+            Instructions:
+            1. Provide a direct and specific answer to the question
+            2. If the question asks for specific items (top N, bottom N, etc.), list them with their values
+            3. If numerical calculations are needed, show the exact values
+            4. If relevant, include key statistics or percentages
+            5. Keep the response clear and concise
+            
+            Response format:
+            - For lists: Use clear numbering (1., 2., etc.)
+            - For calculations: Show the actual values
+            - For comparisons: Include specific numbers
+            """
+            
+            analysis_response = _pandas_agent.run(analysis_prompt)
+            
+            # If we already have a visualization response, combine them
+            if response:
+                response = f"{analysis_response}\n\n{response}"
+            else:
+                response = analysis_response
 
-        # Generate final response
-        analysis_prompt = f"""
-        Previous conversation context (last 5 exchanges):
-        {context_str}
+        # If we still don't have a response, use the original question
+        if not response:
+            response = _pandas_agent.run(analysis_prompt if not needs_viz else question)
         
-        Current question: {question}
-        
-        When analyzing:
-        1. Consider relationships between relevant columns
-        2. If finding specific values, include their related data
-        3. Process complete rows of data when needed
-        4. Include supporting evidence in the response
-        
-        Execute the analysis and return complete results.
-        """
-        
-        response = _pandas_agent.run(analysis_prompt if not needs_viz else question)
         return response, viz_data
         
     except Exception as e:

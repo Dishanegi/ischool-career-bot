@@ -8,7 +8,6 @@ from langchain.memory import ConversationBufferMemory
 from langchain.docstore.document import Document
 import os
 from pdf_reader import load_pdf
-from typing import List, Dict, Any
 import tempfile
 import shutil
 
