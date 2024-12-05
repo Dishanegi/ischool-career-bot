@@ -260,7 +260,7 @@ class VoiceAssistant:
         # Combine in specific order
         final_questions = (
             behavioral_questions +  # First 4 questions are behavioral
-            technical_questions +   # Then technical based on role
+            technical_questions +   # Then technical questions based on role
             evaluation_question +   # Then strengths/weaknesses
             closing_question       # End with closing question
         )

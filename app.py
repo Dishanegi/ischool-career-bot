@@ -13,10 +13,11 @@ from collections import deque
 
 class PageType(Enum):
     HOME = "Home"
-    COVER_LETTER = "Cover Letter Generator"
-    RESUME = "Resume Generator"
-    VOICE_CHAT = "Voice Chat Assistant"
     CAREER_CATALYST = "CareerCatalyst Analytics"  
+    RESUME = "Resume Generator"
+    COVER_LETTER = "Cover Letter Generator"
+    VOICE_CHAT = "Voice Chat Assistant"
+    
 
 def load_css(css_file):
     with open(css_file) as f:
