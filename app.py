@@ -8,7 +8,6 @@ import pathlib
 from audio_recorder_streamlit import audio_recorder
 from voice_chat_assistant import VoiceAssistant
 from collections import deque
-import os
 
 class PageType(Enum):
     HOME = "Home"

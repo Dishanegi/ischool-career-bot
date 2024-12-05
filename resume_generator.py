@@ -84,28 +84,59 @@ def get_resume(job_description: str, resume_file, openai_api_key: str):
                 memory=memory,
             )
         
-        # Create analysis and chat chains with their respective templates
+        # Create analysis and chat chains with their respective templates COMMENT
+
         analysis_template = """
-        You are an expert resume analyzer and career advisor. First, analyze the resume and job description provided in the context.
-        
-        Perform a detailed analysis:
-        1. Calculate a match percentage based on:
-           - Required skills match
-           - Experience level match
-           - Education requirements match
-           - Industry alignment
-        
-        2. Provide a brief explanation of the rating, highlighting:
-           - Key matching qualifications
-           - Areas where the candidate exceeds requirements
-           - Potential gaps or areas for improvement
-        
-        Present this information in a clear, professional format. End by asking if the user would like to know more details about specific aspects of the match.
-        
-        Context: {context}
-        Question: {question}
-        Chat History: {chat_history}
-        """
+            You are an AI-powered Applicant Tracking System designed to help users optimize their resumes for specific job descriptions. Follow these instructions step by step and provide a single consolidated response:
+
+            ### Step 1: Analyze the Job Description
+            1. Analyze the job description in the context and extract the most important **hard skills** and **soft skills** required. 
+            2. Format the result as a prioritized list of skills or keywords.
+
+            ---
+
+            ### Step 2: Analyze the Resume
+            1. Analyze the resume content in the context and extract all relevant **skills, certifications, and experiences**.
+            2. Compare these with the skills extracted from the job description and identify which **keywords** from the job description are **missing** in the resume.
+
+            ---
+
+            ### Step 3: Score the Resume
+            Score the resume based on the following criteria:
+            1. **STAR Format**: Evaluate if each bullet point in the resume follows the STAR (Situation, Task, Action, Result) format. Highlight bullet points that do not follow this format and provide suggestions to improve them.
+            2. **Action Verbs**: Check if all bullet points start with action verbs. Highlight bullet points that do not and suggest corrections.
+            3. **Structure**: Evaluate if the resume is well-structured into clear sections such as Education, Work Experience, and Skills. Suggest improvements if any sections are disorganized or missing.
+            4. **Grammar and Sentence Formation**: Identify and correct any grammatical errors or sentence structure issues in the resume.
+
+            Provide a **detailed breakdown of the score**, explaining where the resume excels and where it needs improvement.
+
+            ---
+
+            ### Step 4: Recommend Keyword Integration
+            1. For each missing keyword identified in Step 2, suggest where it can be incorporated in the resume. Specify the **exact section** and **line number** (if possible).
+            2. Draft new or revised bullet points that include the missing keywords. Ensure each revised bullet point:
+            - Starts with an **action verb**.
+            - Follows the **STAR format**.
+            - Fits seamlessly into the relevant section of the resume.
+
+            ---
+
+            ### Step 5: Provide Consolidated Feedback
+            Consolidate all the findings into a single, well-structured response. Include:
+            1. Extracted skills and keywords from the job description.
+            2. Missing keywords from the resume.
+            3. The resume score with detailed feedback.
+            4. Suggested revisions and newly drafted bullet points with incorporated keywords.
+
+            Provide this response in a professional, clear, and actionable format so that it helps the user improve their resume effectively.
+
+            Context: {context}
+            Question: {question}
+            Chat History: {chat_history}
+            
+            """
+
+
         
         chat_template = """
         You are a helpful career advisor assistant. Using the provided resume and job description:
