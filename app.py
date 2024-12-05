@@ -5,15 +5,18 @@ from enum import Enum
 from typing import Callable, Tuple
 import time
 import pathlib
+import pandas as pd
 from audio_recorder_streamlit import audio_recorder
 from voice_chat_assistant import VoiceAssistant
+from career_catalyst import get_llm,get_pandas_agent,process_question,initial_analysis
 from collections import deque
 
 class PageType(Enum):
     HOME = "Home"
     COVER_LETTER = "Cover Letter Generator"
     RESUME = "Resume Generator"
-    VOICE_CHAT = "Voice Chat Assistant" 
+    VOICE_CHAT = "Voice Chat Assistant"
+    CAREER_CATALYST = "CareerCatalyst Analytics"  
 
 def load_css(css_file):
     with open(css_file) as f:
@@ -65,39 +68,12 @@ def render_home_page():
     st.markdown("<div style='height: 2rem'></div>", unsafe_allow_html=True)
 
     # Stats Section
-    st.markdown("""
-        <h2 class="section-header">Our Impact</h2>
-    """, unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("""
-            <div class="stat-card">
-                <div class="stat-number">90%</div>
-                <div class="stat-label">Success Rate</div>
-            </div>
-        """, unsafe_allow_html=True)
-    with col2:
-        st.markdown("""
-            <div class="stat-card">
-                <div class="stat-number">10K+</div>
-                <div class="stat-label">Documents Generated</div>
-            </div>
-        """, unsafe_allow_html=True)
-    with col3:
-        st.markdown("""
-            <div class="stat-card">
-                <div class="stat-number">24/7</div>
-                <div class="stat-label">AI Assistance</div>
-            </div>
-        """, unsafe_allow_html=True)
-
-    # Features Section
+    # Updated Features Section with CareerCatalyst
     st.markdown("""
         <h2 class="section-header">🚀 Our Tools</h2>
     """, unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.markdown("""
@@ -120,6 +96,14 @@ def render_home_page():
             <div class="feature-card">
                 <h3 class="feature-title">🎙️ Voice Chat Interview Bot</h3>
                 <p style="font-family: 'Poppins', sans-serif;">Practice your interview skills with our AI-powered voice chat assistant. Get real-time feedback and improve your interview confidence.</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with col4:
+        st.markdown("""
+            <div class="feature-card">
+                <h3 class="feature-title">📊 CareerCatalyst Analytics</h3>
+                <p style="font-family: 'Poppins', sans-serif;">Explore interactive visualizations of alumni employment data. Gain insights into career paths, salary trends, and industry distributions.</p>
             </div>
         """, unsafe_allow_html=True)
 
@@ -528,17 +512,115 @@ def render_voice_chat_page():
             st.session_state.awaiting_response = False
             st.rerun()
 
+def render_career_catalyst_page():
+    """Render the CareerCatalyst analytics page."""
+    timestamp = int(time.time() * 1000)
+    
+    st.markdown(f"""
+        <div class="page-container animation-{timestamp}">
+            <h1 class="page-title animated-title animation-{timestamp}">CareerCatalyst Analytics</h1>
+            <p class="page-subtitle animation-{timestamp}">Explore Alumni Employment Insights and Career Trends</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Initialize session state
+    if 'clicked' not in st.session_state:
+        st.session_state.clicked = {1: False}
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+    if 'analysis_complete' not in st.session_state:
+        st.session_state.analysis_complete = False
+    if 'df' not in st.session_state:
+        st.session_state.df = None
+    if 'llm' not in st.session_state:
+        st.session_state.llm = None
+    if 'pandas_agent' not in st.session_state:
+        st.session_state.pandas_agent = None
+
+    # File Upload Section
+    st.markdown("### 📤 Upload Employment Data")
+
+    def clicked(button):
+        """Update session state when button is clicked"""
+        st.session_state.clicked[button] = True
+
+    # Main app flow
+    st.button("Let's get started", on_click=clicked, args=[1])
+
+    if st.session_state.clicked[1]:
+        user_csv = st.file_uploader("Upload your file here", type="csv")
+        if user_csv is not None:
+            try:
+                user_csv.seek(0)
+                df = pd.read_csv(user_csv, engine='python')
+                
+                if df is not None:
+                    # Store DataFrame in session state
+                    st.session_state.df = df
+                    
+                    # Initialize LLM and agent if not already done
+                    if st.session_state.llm is None:
+                        st.session_state.llm = get_llm()
+                    if st.session_state.pandas_agent is None:
+                        st.session_state.pandas_agent = get_pandas_agent(st.session_state.llm, df)
+
+                    # Perform initial analysis only if not done yet
+                    if not st.session_state.analysis_complete:
+                        initial_analysis(st.session_state.pandas_agent, df)
+
+                    st.write("---")
+                    st.subheader("Ask me anything about your data 💭")
+                    
+                    # Display chat history
+                    for message in st.session_state.chat_history:
+                        with st.chat_message(message["role"]):
+                            st.markdown(message["content"])
+
+                    # Get user input
+                    user_question = st.chat_input("Type your question here...")
+                    if user_question:
+                        # Add user message to history
+                        st.session_state.chat_history.append({
+                            "role": "user",
+                            "content": user_question
+                        })
+
+                        # Process the question and get response
+                        with st.chat_message("assistant"):
+                            # Pass the current DataFrame from session state
+                            response = process_question(
+                                st.session_state.pandas_agent,
+                                user_question,
+                                st.session_state.df  # Use DataFrame from session state
+                            )
+                            
+                            # Add assistant's response to history
+                            st.session_state.chat_history.append({
+                                "role": "assistant",
+                                "content": response
+                            })
+
+                        # Rerun to update the chat display
+                        st.rerun()
+                            
+            except Exception as e:
+                st.error(f"Error reading CSV file: {str(e)}")
+                st.stop()
+
+
 def main():
     # Sidebar
     with st.sidebar:
         st.markdown('<h2 class="sidebar-title">Navigation</h2>', unsafe_allow_html=True)
         page = PageType(st.radio("Select Page:", [page.value for page in PageType]))
     
-    # Main content
+    # Main content routing
     if page == PageType.HOME:
         render_home_page()
-    elif page == PageType.VOICE_CHAT:  # New condition for voice chat page
+    elif page == PageType.VOICE_CHAT:
         render_voice_chat_page()
+    elif page == PageType.CAREER_CATALYST:
+        render_career_catalyst_page()
     else:
         render_generator_page(page)
     
