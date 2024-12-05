@@ -7,7 +7,7 @@ import numpy as np
 import os
 from dotenv import load_dotenv, find_dotenv
 
-# OpenAIKey
+# OpenAI Key
 os.environ['OPENAI_API_KEY']=st.secrets["openai_api_key"]
 load_dotenv(find_dotenv())
 

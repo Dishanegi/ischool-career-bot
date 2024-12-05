@@ -13,3 +13,4 @@ audio_recorder_streamlit
 google-search-results
 plotly
 langchain_experimental
+matplotlib
