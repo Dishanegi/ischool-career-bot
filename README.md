@@ -113,3 +113,8 @@
 - **Frameworks**: Streamlit, LangChain
 - **APIs**: OpenAI GPT-4, TTS, Whisper, SerpAPI
 - **Database**: Chroma for vector storage
+
+---
+
+## Links
+- **Live Demo**: [SU Career iBot Application]([https://your-app-link.com](https://su-career-ibot.streamlit.app/))
